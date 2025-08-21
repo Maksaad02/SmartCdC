@@ -57,11 +57,15 @@ const PaymentForm = () => {
         const debts = await response.json();
         console.log("Fetched debts:", debts); // Debug log
         
-        // Filter debts with remaining balance
+        // Filter debts with remaining balance and include penalties
         const debtsWithRemaining = debts
           .map((debt: any) => ({
             ...debt,
-            remaining: debt.montantFacture - debt.montantEncaisse
+            // Use the solde field which already includes penalties, or calculate it
+            remaining: debt.solde || (debt.montantFacture + (debt.montantPenalites || 0) - debt.montantEncaisse),
+            // Add penalty info for display
+            hasPenalties: (debt.montantPenalites || 0) > 0,
+            totalWithPenalties: debt.montantFacture + (debt.montantPenalites || 0)
           }))
           .filter((debt: any) => debt.remaining > 0);
 
@@ -164,7 +168,17 @@ const PaymentForm = () => {
     }
     
     if (paymentAmount > selectedDebt.remaining) {
-      toast.error(`Le montant du paiement ne peut pas dépasser le solde restant (${formatCurrency(selectedDebt.remaining)} MAD)`);
+      const totalWithPenalties = selectedDebt.totalWithPenalties;
+      const alreadyPaid = selectedDebt.montantEncaisse;
+      const remainingWithPenalties = selectedDebt.remaining;
+      
+      let errorMessage = `Le montant du paiement ne peut pas dépasser le solde restant (${formatCurrency(remainingWithPenalties)} MAD)`;
+      
+      if (selectedDebt.hasPenalties) {
+        errorMessage += `\n\nDétail :\n- Montant facturé : ${formatCurrency(selectedDebt.montantFacture)} MAD\n- Pénalités : ${formatCurrency(selectedDebt.montantPenalites)} MAD\n- Total : ${formatCurrency(totalWithPenalties)} MAD\n- Déjà payé : ${formatCurrency(alreadyPaid)} MAD`;
+      }
+      
+      toast.error(errorMessage);
       return;
     }
 
@@ -237,11 +251,51 @@ const PaymentForm = () => {
                     <SelectContent>
                       {debtsWithClients.map((debt: any) => (
                         <SelectItem key={debt.numFacture} value={debt.numFacture}>
-                          {debt.numFacture} - {debt.clientName} ({formatCurrency(debt.remaining)} MAD)
+                          {debt.numFacture} - {debt.clientName} 
+                          {debt.hasPenalties ? (
+                            <span className="text-red-600">
+                              {" "}({formatCurrency(debt.totalWithPenalties)} MAD incl. pénalités)
+                            </span>
+                          ) : (
+                            <span>
+                              {" "}({formatCurrency(debt.totalWithPenalties)} MAD)
+                            </span>
+                          )}
+                          {" "}- Reste: {formatCurrency(debt.remaining)} MAD
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  
+                  {/* Information sur la créance sélectionnée */}
+                  {formData.debtId && (() => {
+                    const selectedDebt = debtsWithClients.find(d => d.numFacture === formData.debtId);
+                    if (selectedDebt) {
+                      return (
+                        <div className="mt-3 p-3 bg-gray-50 rounded-md text-sm">
+                          <div className="font-medium mb-2">Détails de la créance :</div>
+                          <div className="space-y-1 text-gray-600">
+                            <div>Montant facturé : {formatCurrency(selectedDebt.montantFacture)} MAD</div>
+                            {selectedDebt.hasPenalties && (
+                              <div className="text-red-600">
+                                Pénalités : +{formatCurrency(selectedDebt.montantPenalites)} MAD
+                              </div>
+                            )}
+                            <div className="font-medium">
+                              Total à payer : {formatCurrency(selectedDebt.totalWithPenalties)} MAD
+                            </div>
+                            <div className="text-blue-600">
+                              Déjà payé : {formatCurrency(selectedDebt.montantEncaisse)} MAD
+                            </div>
+                            <div className="font-bold text-lg">
+                              Reste à payer : {formatCurrency(selectedDebt.remaining)} MAD
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
                 <div className="space-y-2">

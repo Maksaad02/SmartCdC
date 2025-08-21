@@ -22,9 +22,57 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [authToken, setAuthToken] = useState<string | null>(
-    localStorage.getItem("auth_token")
-  );
+  const [authToken, setAuthToken] = useState<string | null>(null);
+
+  // Validate stored token on mount
+  React.useEffect(() => {
+    const validateStoredToken = async () => {
+      const storedToken = localStorage.getItem("auth_token");
+      const storedUser = localStorage.getItem("user");
+      
+      if (storedToken && storedUser) {
+        try {
+          // Validate token by making a test API call
+          const response = await fetch(`${API_URL}/utilisateurs/me`, {
+            headers: {
+              "Authorization": `Bearer ${storedToken}`,
+              "Content-Type": "application/json",
+            },
+          });
+          
+          if (response.ok) {
+            // Token is valid, restore user session
+            const userData = await response.json();
+            const user: User = {
+              id: userData.email || "unknown",
+              name: userData.nom || "Agent",
+              email: userData.email || "unknown",
+              role: userData.role?.toLowerCase() || "user",
+              createdAt: new Date()
+            };
+            
+            setCurrentUser(user);
+            setAuthToken(storedToken);
+          } else {
+            // Token is invalid, clear storage
+            localStorage.removeItem("auth_token");
+            localStorage.removeItem("user");
+            setCurrentUser(null);
+            setAuthToken(null);
+          }
+        } catch (error) {
+          console.error("Token validation failed:", error);
+          // Clear invalid token
+          localStorage.removeItem("auth_token");
+          localStorage.removeItem("user");
+          setCurrentUser(null);
+          setAuthToken(null);
+        }
+      }
+    };
+
+    validateStoredToken();
+  }, []);
 
   // Register functionality connecting to Spring Boot backend
   const register = async (name: string, email: string, password: string) => {
@@ -133,26 +181,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("auth_token");
     toast.info("Déconnexion réussie");
   };
-
-  // Check if user is already logged in (from localStorage)
-  React.useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    const token = localStorage.getItem("auth_token");
-
-    console.log("Hydration AuthContext -> Stored token: ", token);
-    console.log("Hydration AuthContext -> Stored user: ", storedUser);
-    
-    if (storedUser && token) {
-      try {
-        setCurrentUser(JSON.parse(storedUser));
-        setAuthToken(token);
-      } catch (error) {
-        console.error("Failed to parse stored user", error);
-        localStorage.removeItem("user");
-        localStorage.removeItem("auth_token");
-      }
-    }
-  }, []);
 
   //Log à chaque changement de token
   React.useEffect(() => {
