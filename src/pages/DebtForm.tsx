@@ -40,7 +40,7 @@ const DebtForm = () => {
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const response = await fetch("http://localhost:8080/api/clients", {
+        const response = await fetch("http://34.226.195.59:8080/api/clients", {
           headers: {
             Authorization: `Bearer ${authToken}`
           }
@@ -61,7 +61,7 @@ const DebtForm = () => {
       const fetchDebt = async () => {
         setLoading(true);
         try {
-          const response = await fetch(`http://localhost:8080/api/creances/${id}`, {
+          const response = await fetch(`http://34.226.195.59:8080/api/creances/${id}`, {
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${authToken}`
@@ -146,8 +146,8 @@ const DebtForm = () => {
 
     try {
       const url = isEditing
-        ? `http://localhost:8080/api/creances/${id}`
-        : "http://localhost:8080/api/creances";
+        ? `http://34.226.195.59:8080/api/creances/${id}`
+        : "http://34.226.195.59:8080/api/creances";
 
       const response = await fetch(url, {
         method: isEditing ? "PUT" : "POST",

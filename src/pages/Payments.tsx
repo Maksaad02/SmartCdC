@@ -29,7 +29,7 @@ const Payments: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const { authToken } = useAuth();
   
-  const API_URL = "http://localhost:8080/api";
+  const API_URL = "http://34.226.195.59:8080/api";
 
   useEffect(() => {
     const fetchPayments = async () => {

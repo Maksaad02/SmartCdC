@@ -43,19 +43,19 @@ const UserManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/utilisateurs', {
+      const response = await fetch('http://34.226.195.59:8080/api/utilisateurs', {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
         },
       });
-      const data = await response.json();
+      const data: User[] = await response.json();
       console.log('Received users data:', data); // Debug log
 
       // Make sure we properly map the roles from the backend
-      const mappedUsers = data.map(user => ({
+      const mappedUsers: User[] = data.map((user: User) => ({
         ...user,
         // Ensure role is lowercase to match our type
-        role: user.role?.toLowerCase() === 'admin' ? 'admin' : 'agent'
+        role: user.role?.toLowerCase() === 'admin' ? 'admin' as const : 'agent' as const
       }));
 
       console.log('Mapped users:', mappedUsers); // Debug log
@@ -74,7 +74,7 @@ const UserManagement: React.FC = () => {
     try {
       console.log('Updating role for user:', userId, 'to:', newRole); // Debug log
       
-      await fetch(`http://localhost:8080/api/utilisateurs/${userId}/role`, {
+      await fetch(`http://34.226.195.59:8080/api/utilisateurs/${userId}/role`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

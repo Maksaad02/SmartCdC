@@ -41,7 +41,7 @@ const PaymentForm = () => {
   useEffect(() => {
     const fetchDebts = async () => {
       try {
-        const response = await fetch("http://localhost:8080/api/creances", {
+        const response = await fetch("http://34.226.195.59:8080/api/creances", {
           method: "GET",
           headers: {
             "Authorization": `Bearer ${authToken}`,
@@ -85,7 +85,7 @@ const PaymentForm = () => {
       const fetchPayment = async () => {
         setLoading(true);
         try {
-          const response = await fetch(`http://localhost:8080/api/reglements/${id}`, {
+          const response = await fetch(`http://34.226.195.59:8080/api/reglements/${id}`, {
             headers: {
               "Authorization": `Bearer ${authToken}`,
               "Content-Type": "application/json"
@@ -194,8 +194,8 @@ const PaymentForm = () => {
 
     try {
       const url = isEditing
-        ? `http://localhost:8080/api/reglements/${id}`
-        : "http://localhost:8080/api/reglements";
+        ? `http://34.226.195.59:8080/api/reglements/${id}`
+        : "http://34.226.195.59:8080/api/reglements";
 
       const methode = isEditing ? "PUT" : "POST";
 

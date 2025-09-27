@@ -22,7 +22,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-const API_URL = "http://localhost:8080/api";
+const API_URL = "http://34.226.195.59:8080/api";
 
 const ClientDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();

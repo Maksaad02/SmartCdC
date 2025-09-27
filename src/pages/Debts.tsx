@@ -32,7 +32,7 @@ const Debts: React.FC = () => {
   const { authToken } = useAuth();
   
 
-  const API_URL = "http://localhost:8080/api";
+  const API_URL = "http://34.226.195.59:8080/api";
 
   useEffect(() => {
     const fetchDebts = async () => {
@@ -85,7 +85,6 @@ const Debts: React.FC = () => {
       "Statut": statut,
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Créances");
     const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
