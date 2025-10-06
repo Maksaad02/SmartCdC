@@ -16,7 +16,7 @@ interface AuthContextType {
   authToken: string | null;
 } 
 
-const API_URL = "http://34.226.195.59:8080/api"; // Replace with your Spring Boot API URL
+const API_URL = "http://localhost:8080/api"; // Replace with your Spring Boot API URL
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 

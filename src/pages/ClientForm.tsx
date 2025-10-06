@@ -35,7 +35,7 @@ const ClientForm = () => {
       const fetchClient = async () => {
         setLoading(true);
         try {
-          const response = await fetch(`http://34.226.195.59:8080/api/clients/${id}`, {
+          const response = await fetch(`http://localhost:8080/api/clients/${id}`, {
             headers: {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${authToken}`
@@ -89,8 +89,8 @@ const ClientForm = () => {
 
     try {
       const url = isEditing 
-        ? `http://34.226.195.59:8080/api/clients/${id}`
-        : "http://34.226.195.59:8080/api/clients";
+        ? `http://localhost:8080/api/clients/${id}`
+        : "http://localhost:8080/api/clients";
       
       const method = isEditing ? "PUT" : "POST";
 

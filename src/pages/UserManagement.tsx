@@ -43,7 +43,7 @@ const UserManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('http://34.226.195.59:8080/api/utilisateurs', {
+      const response = await fetch('http://localhost:8080/api/utilisateurs', {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
         },
@@ -74,7 +74,7 @@ const UserManagement: React.FC = () => {
     try {
       console.log('Updating role for user:', userId, 'to:', newRole); // Debug log
       
-      await fetch(`http://34.226.195.59:8080/api/utilisateurs/${userId}/role`, {
+      await fetch(`http://localhost:8080/api/utilisateurs/${userId}/role`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

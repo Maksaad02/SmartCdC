@@ -2,7 +2,7 @@
  * Utility for making authenticated API calls
  */
 
-const API_URL = "http://34.226.195.59:8080/api";
+const API_URL = "http://localhost:8080/api";
 
 /**
  * Make an authenticated API request

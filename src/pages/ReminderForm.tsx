@@ -42,7 +42,7 @@ const ReminderForm = () => {
     const fetchDebts = async () => {
       try {
         // Fetch debts
-        const response = await fetch("http://34.226.195.59:8080/api/creances", {
+        const response = await fetch("http://localhost:8080/api/creances", {
           headers: {
             "Authorization": `Bearer ${authToken}`,
             "Content-Type": "application/json"
@@ -56,7 +56,7 @@ const ReminderForm = () => {
         const debts = await response.json();
         
         // Fetch clients to get their email addresses
-        const clientsResponse = await fetch("http://34.226.195.59:8080/api/clients", {
+        const clientsResponse = await fetch("http://localhost:8080/api/clients", {
           headers: {
             "Authorization": `Bearer ${authToken}`,
             "Content-Type": "application/json"
@@ -95,7 +95,7 @@ const ReminderForm = () => {
       const fetchReminder = async () => {
         setLoading(true);
         try {
-          const response = await fetch(`http://34.226.195.59:8080/api/relances/${id}`, {
+          const response = await fetch(`http://localhost:8080/api/relances/${id}`, {
             headers: {
               "Authorization": `Bearer ${authToken}`,
               "Content-Type": "application/json"
@@ -153,8 +153,8 @@ const ReminderForm = () => {
 
     try {
       const url = isEditing
-        ? `http://34.226.195.59:8080/api/relances/${id}`
-        : "http://34.226.195.59:8080/api/relances";
+        ? `http://localhost:8080/api/relances/${id}`
+        : "http://localhost:8080/api/relances";
 
       const methode = isEditing ? "PUT" : "POST";
 
@@ -181,7 +181,7 @@ const ReminderForm = () => {
             msgBody: formData.commentaire || `Nous vous rappelons le paiement de la facture ${formData.numFacture}.`
           };
 
-          const emailResponse = await fetch(`http://34.226.195.59:8080/api/sendMail`, {
+          const emailResponse = await fetch(`http://localhost:8080/api/sendMail`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
