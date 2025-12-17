@@ -36,26 +36,26 @@ public class RagDataLoader {
     }
 
 
-    //@Bean
-    public SimpleVectorStore simpleVectorStore(EmbeddingModel embeddingModel) {
-        SimpleVectorStore vectorStore = SimpleVectorStore.builder(embeddingModel).build();
-
-        String fileStore = Path.of("src", "main", "resources", "store")
-                .toAbsolutePath() + "/" + storeFile;
-        File file = new File(fileStore);
-
-        if (!file.exists()) {
-            PagePdfDocumentReader pdfDocumentReader = new PagePdfDocumentReader(pdfResource);
-            List<Document> documents = pdfDocumentReader.get();
-            TextSplitter textSplitter = new TokenTextSplitter();
-            List<Document> chunks = textSplitter.split(documents);
-            vectorStore.accept(chunks);
-            vectorStore.save(file);
-        } else {
-            vectorStore.load(file);
-        }
-        return vectorStore;
-    }
+//    //@Bean
+//    public SimpleVectorStore simpleVectorStore(EmbeddingModel embeddingModel) {
+//        SimpleVectorStore vectorStore = SimpleVectorStore.builder(embeddingModel).build();
+//
+//        String fileStore = Path.of("src", "main", "resources", "store")
+//                .toAbsolutePath() + "/" + storeFile;
+//        File file = new File(fileStore);
+//
+//        if (!file.exists()) {
+//            PagePdfDocumentReader pdfDocumentReader = new PagePdfDocumentReader(pdfResource);
+//            List<Document> documents = pdfDocumentReader.get();
+//            TextSplitter textSplitter = new TokenTextSplitter();
+//            List<Document> chunks = textSplitter.split(documents);
+//            vectorStore.accept(chunks);
+//            vectorStore.save(file);
+//        } else {
+//            vectorStore.load(file);
+//        }
+//        return vectorStore;
+//    }
 
     @PostConstruct
     public void initStore(){
