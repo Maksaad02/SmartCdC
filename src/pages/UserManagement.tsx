@@ -35,6 +35,7 @@ const UserManagement: React.FC = () => {
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
   // ✅ Charger tous les utilisateurs au montage
   useEffect(() => {
@@ -43,7 +44,7 @@ const UserManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/utilisateurs', {
+      const response = await fetch(`${API_URL}/utilisateurs`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
         },
@@ -73,8 +74,8 @@ const UserManagement: React.FC = () => {
   const handleRoleChange = async (userId: number, newRole: 'admin' | 'agent') => {
     try {
       console.log('Updating role for user:', userId, 'to:', newRole); // Debug log
-      
-      await fetch(`http://localhost:8080/api/utilisateurs/${userId}/role`, {
+
+      await fetch(`${API_URL}/utilisateurs/${userId}/role`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -193,11 +194,10 @@ const UserManagement: React.FC = () => {
 
                     <TableCell className="align-middle">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          user.role === 'admin'
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${user.role === 'admin'
                             ? 'bg-red-100 text-red-800'
                             : 'bg-blue-100 text-blue-800'
-                        }`}
+                          }`}
                       >
                         {user.role === 'admin' ? 'Administrateur' : 'Agent'}
                       </span>

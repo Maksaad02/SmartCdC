@@ -6,7 +6,7 @@ import { Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 
- interface Client {
+interface Client {
   id: number;
   raisonSociale: string;
   email: string;
@@ -24,24 +24,24 @@ const Clients: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const { authToken } = useAuth();
 
-    // Add token verification
-      if (!authToken) {
-        throw new Error("Authentication token missing");
-      }
+  // Add token verification
+  if (!authToken) {
+    throw new Error("Authentication token missing");
+  }
 
-  const API_URL = "http://localhost:8080/api";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
   useEffect(() => {
     const fetchClients = async () => {
       try {
         setLoading(true);
         const response = await fetch(`${API_URL}/clients`, {
-              method: "GET",
-              headers: {
-                "Authorization": `Bearer ${authToken}`,
-                "Content-Type": "application/json",
-              }
-            });
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${authToken}`,
+            "Content-Type": "application/json",
+          }
+        });
         if (!response.ok) {
           throw new Error(`Erreur ${response.status}: Impossible de récupérer les clients`);
         }

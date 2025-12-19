@@ -22,7 +22,7 @@ const ReminderForm = () => {
   const isEditing = !!id;
   const { authToken, currentUser } = useAuth();
   const [loading, setLoading] = useState(false);
-  
+
   // Get debt ID from URL query params if it exists
   const urlParams = new URLSearchParams(window.location.search);
   const debtIdFromUrl = urlParams.get('debtId');
@@ -36,13 +36,14 @@ const ReminderForm = () => {
   });
 
   const [debtsWithClients, setDebtsWithClients] = useState<any[]>([]);
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
   // Fetch debts with remaining balance
   useEffect(() => {
     const fetchDebts = async () => {
       try {
         // Fetch debts
-        const response = await fetch("http://localhost:8080/api/creances", {
+        const response = await fetch(`${API_URL}/creances`, {
           headers: {
             "Authorization": `Bearer ${authToken}`,
             "Content-Type": "application/json"
@@ -54,21 +55,21 @@ const ReminderForm = () => {
         }
 
         const debts = await response.json();
-        
+
         // Fetch clients to get their email addresses
-        const clientsResponse = await fetch("http://localhost:8080/api/clients", {
+        const clientsResponse = await fetch(`${API_URL}/clients`, {
           headers: {
             "Authorization": `Bearer ${authToken}`,
             "Content-Type": "application/json"
           }
         });
-        
+
         if (!clientsResponse.ok) {
           throw new Error("Erreur lors du chargement des clients");
         }
-        
+
         const clients = await clientsResponse.json();
-        
+
         // Filter out paid debts and enrich with client email
         const unpaidDebts = debts
           .filter((debt: any) => debt.statut !== "PAYEE")
@@ -79,7 +80,7 @@ const ReminderForm = () => {
               email: client?.email
             };
           });
-          
+
         setDebtsWithClients(unpaidDebts);
       } catch (error) {
         console.error("Error fetching debts:", error);
@@ -95,7 +96,7 @@ const ReminderForm = () => {
       const fetchReminder = async () => {
         setLoading(true);
         try {
-          const response = await fetch(`http://localhost:8080/api/relances/${id}`, {
+          const response = await fetch(`${API_URL}/relances/${id}`, {
             headers: {
               "Authorization": `Bearer ${authToken}`,
               "Content-Type": "application/json"
@@ -135,7 +136,7 @@ const ReminderForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validation
     if (!formData.numFacture || !formData.dateRelance || !formData.typeRelance || !formData.statutRelance) {
       toast.error("Veuillez remplir tous les champs obligatoires");
@@ -153,8 +154,8 @@ const ReminderForm = () => {
 
     try {
       const url = isEditing
-        ? `http://localhost:8080/api/relances/${id}`
-        : "http://localhost:8080/api/relances";
+        ? `${API_URL}/relances/${id}`
+        : `${API_URL}/relances`;
 
       const methode = isEditing ? "PUT" : "POST";
 
@@ -181,7 +182,7 @@ const ReminderForm = () => {
             msgBody: formData.commentaire || `Nous vous rappelons le paiement de la facture ${formData.numFacture}.`
           };
 
-          const emailResponse = await fetch(`http://localhost:8080/api/sendMail`, {
+          const emailResponse = await fetch(`${API_URL}/sendMail`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -200,7 +201,7 @@ const ReminderForm = () => {
           toast.error("Impossible de trouver l'email du client");
         }
       } else {
-      toast.success(isEditing ? "Relance modifiée avec succès" : "Relance ajoutée avec succès");
+        toast.success(isEditing ? "Relance modifiée avec succès" : "Relance ajoutée avec succès");
       }
 
       navigate("/reminders");

@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import { 
-  ArrowUp, 
-  ArrowDown, 
-  BarChart, 
-  Calendar, 
-  AlertTriangle, 
-  PieChartIcon, 
-  DollarSign, 
-  Users 
+import {
+  ArrowUp,
+  ArrowDown,
+  BarChart,
+  Calendar,
+  AlertTriangle,
+  PieChartIcon,
+  DollarSign,
+  Users
 } from "lucide-react";
 import { formatCurrency } from "../utils/formatters";
 import { useAuth } from "../contexts/AuthContext";
@@ -59,7 +59,7 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [todayReminders, setTodayReminders] = useState<Reminder[]>([]);
-  const API_URL = "http://localhost:8080/api";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
   useEffect(() => {
     const fetchDashboardData = async () => {

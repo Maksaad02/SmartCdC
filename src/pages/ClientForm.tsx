@@ -30,20 +30,22 @@ const ClientForm = () => {
     ice: ""
   });
 
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+
   useEffect(() => {
     if (isEditing && id) {
       const fetchClient = async () => {
         setLoading(true);
         try {
-          const response = await fetch(`http://localhost:8080/api/clients/${id}`, {
+          const response = await fetch(`${API_URL}/clients/${id}`, {
             headers: {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${authToken}`
             }
           });
-          
+
           if (!response.ok) throw new Error("Client non trouvé");
-          
+
           const client = await response.json();
           setFormData({
             raisonSociale: client.raisonSociale,
@@ -73,7 +75,7 @@ const ClientForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validation
     if (!formData.raisonSociale || !formData.email || !formData.telephone || !formData.adresse) {
       toast.error("Veuillez remplir tous les champs obligatoires");
@@ -88,10 +90,10 @@ const ClientForm = () => {
     }
 
     try {
-      const url = isEditing 
-        ? `http://localhost:8080/api/clients/${id}`
-        : "http://localhost:8080/api/clients";
-      
+      const url = isEditing
+        ? `${API_URL}/clients/${id}`
+        : `${API_URL}/clients`;
+
       const method = isEditing ? "PUT" : "POST";
 
       const payload = {

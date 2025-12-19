@@ -46,14 +46,14 @@ const Reminders: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const { authToken } = useAuth();
 
-  const API_URL = "http://localhost:8080/api";
-  
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+
   useEffect(() => {
     const fetchReminders = async () => {
       try {
         setLoading(true);
         console.log("Fetching reminders...");
-        
+
         // First, fetch all reminders
         const response = await fetch(`${API_URL}/relances`, {
           method: "GET",
@@ -62,27 +62,27 @@ const Reminders: React.FC = () => {
             "Content-Type": "application/json",
           }
         });
-        
+
         if (!response.ok) {
           throw new Error(`Erreur ${response.status}: ${response.statusText}`);
         }
-        
+
         const remindersData: Reminder[] = await response.json();
         console.log("Reminders data received:", remindersData);
-        
+
         // Then, fetch the associated debts for each reminder
         const remindersWithDebts = await Promise.all(
           remindersData.map(async (reminder) => {
             try {
               console.log(`Fetching debt for reminder ${reminder.id}, numFacture: ${reminder.numFacture}`);
-              
+
               const debtResponse = await fetch(`${API_URL}/creances/${reminder.numFacture}`, {
                 headers: {
                   "Authorization": `Bearer ${authToken}`,
                   "Content-Type": "application/json",
                 }
               });
-              
+
               if (debtResponse.ok) {
                 const debtData = await debtResponse.json();
                 console.log(`Debt data for ${reminder.numFacture}:`, debtData);
@@ -100,7 +100,7 @@ const Reminders: React.FC = () => {
             }
           })
         );
-        
+
         setReminders(remindersWithDebts);
       } catch (error) {
         console.error("Erreur lors de la récupération des relances:", error);
@@ -123,7 +123,7 @@ const Reminders: React.FC = () => {
           "Content-Type": "application/json",
         }
       });
-      
+
       if (response.ok) {
         toast.success("Relance envoyée avec succès");
         // Refresh the reminders list
@@ -140,29 +140,29 @@ const Reminders: React.FC = () => {
 
   const filteredReminders = reminders.filter(reminder => {
     const searchLower = searchTerm.toLowerCase();
-    
+
     // Apply search filter
     const matchesSearch =
       reminder.numFacture.toLowerCase().includes(searchLower);
-      
+
     // Apply type filter
     const matchesType = !typeFilter || reminder.typeRelance === typeFilter;
-    
+
     // Apply status filter
     const matchesStatus = !statusFilter || reminder.statutRelance === statusFilter;
-    
+
     // Apply today filter
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Set to start of day
-    
+
     const reminderDate = new Date(reminder.dateRelance);
     reminderDate.setHours(0, 0, 0, 0); // Set to start of day
-    
+
     const matchesToday = !todayFilter || today.getTime() === reminderDate.getTime();
-      
+
     return matchesSearch && matchesType && matchesStatus && matchesToday;
   });
-  
+
   const getTypeStyle = (type: string) => {
     switch (type.toLowerCase()) {
       case "email":
@@ -236,7 +236,7 @@ const Reminders: React.FC = () => {
       <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
         <div className="p-6">
           <h2 className="text-lg font-semibold">Liste des relances</h2>
-          
+
           <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4">
             <div className="relative w-full sm:w-96">
               <Search className="absolute left-2 top-3 h-4 w-4 text-muted-foreground" />
@@ -247,12 +247,12 @@ const Reminders: React.FC = () => {
                 className="pl-10"
               />
             </div>
-            
+
             <div className="flex flex-col sm:flex-row items-center gap-3">
               <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="today" 
-                  checked={todayFilter} 
+                <Checkbox
+                  id="today"
+                  checked={todayFilter}
                   onCheckedChange={(checked) => setTodayFilter(checked as boolean)}
                 />
                 <label
@@ -265,7 +265,7 @@ const Reminders: React.FC = () => {
               </div>
             </div>
           </div>
-          
+
           <div className="mt-6 overflow-x-auto">
             <table className="w-full border-collapse">
               <thead className="bg-muted/50">
@@ -283,20 +283,20 @@ const Reminders: React.FC = () => {
                 {filteredReminders.map((reminder) => {
                   const today = new Date();
                   const dueDate = reminder.creance?.echeance ? new Date(reminder.creance.echeance) : null;
-                  const daysLate = dueDate && today > dueDate ? 
-                      Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                  const daysLate = dueDate && today > dueDate ?
+                    Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
                   const clientName = reminder.creance?.clientName || 'N/A';
                   const canSendManually = reminder.statutRelance === "EN_ATTENTE";
-                  
+
                   return (
                     <tr key={reminder.id} className="hover:bg-muted/50">
                       <td className="px-4 py-3 text-sm">{clientName}</td>
                       <td className="px-4 py-3 text-sm">{reminder.numFacture}</td>
                       <td className="px-4 py-3 text-sm">
                         <Badge className={getTypeStyle(reminder.typeRelance)}>
-                          {reminder.typeRelance === "EMAIL" ? "Email" : 
-                           reminder.typeRelance === "TELEPHONE" ? "Téléphone" : 
-                           reminder.typeRelance === "COURRIER" ? "Courrier" : reminder.typeRelance}
+                          {reminder.typeRelance === "EMAIL" ? "Email" :
+                            reminder.typeRelance === "TELEPHONE" ? "Téléphone" :
+                              reminder.typeRelance === "COURRIER" ? "Courrier" : reminder.typeRelance}
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-sm">{formatDate(reminder.dateRelance)}</td>
@@ -312,9 +312,9 @@ const Reminders: React.FC = () => {
                             <Button variant="outline" size="sm">Détails</Button>
                           </Link>
                           {canSendManually && (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
+                            <Button
+                              variant="outline"
+                              size="sm"
                               onClick={() => handleManualSend(reminder.id)}
                               className="text-green-600 hover:text-green-700"
                             >
@@ -326,7 +326,7 @@ const Reminders: React.FC = () => {
                     </tr>
                   );
                 })}
-                
+
                 {filteredReminders.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">

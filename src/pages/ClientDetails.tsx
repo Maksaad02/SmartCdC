@@ -22,7 +22,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-const API_URL = "http://localhost:8080/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
 const ClientDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -52,7 +52,7 @@ const ClientDetails: React.FC = () => {
 
       pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, scaledHeight);
       pdf.save(`client-details-${client?.raisonSociale || "rapport"}.pdf`);
-      
+
       toast.success("Rapport généré avec succès");
     } catch (error) {
       console.error("Error generating PDF:", error);
@@ -86,12 +86,12 @@ const ClientDetails: React.FC = () => {
           },
         });
         const allDebts = await debtsResponse.json();
-        
+
         // Filter debts to only include those belonging to this client
-        const clientDebts = allDebts.filter((debt: Debt) => 
+        const clientDebts = allDebts.filter((debt: Debt) =>
           debt.clientName === clientData.raisonSociale
         );
-        
+
         setDebts(clientDebts);
       } catch (error) {
         console.error("Error fetching client details:", error);

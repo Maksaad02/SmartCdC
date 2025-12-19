@@ -38,7 +38,7 @@ const DebtDetails: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
 
-  const API_URL = "http://localhost:8080/api";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
   useEffect(() => {
     const fetchDebtDetails = async () => {
@@ -67,12 +67,12 @@ const DebtDetails: React.FC = () => {
           },
         });
         const paymentsData = await paymentsResponse.json();
-        
+
         // Additional filter to ensure we only get payments for this specific debt
         const filteredPayments = paymentsData.filter(
           (payment: Payment) => payment.numFacture === debtData.numFacture
         );
-        
+
         setPayments(filteredPayments);
 
         // Fetch related reminders - using both numFacture and debtId to ensure we only get reminders for this debt
@@ -83,12 +83,12 @@ const DebtDetails: React.FC = () => {
           },
         });
         const remindersData = await remindersResponse.json();
-        
+
         // Additional filter to ensure we only get reminders for this specific debt
         const filteredReminders = remindersData.filter(
           (reminder: Reminder) => reminder.numFacture === debtData.numFacture
         );
-        
+
         setReminders(filteredReminders);
 
       } catch (error) {
@@ -122,7 +122,7 @@ const DebtDetails: React.FC = () => {
     const totalInvoiced = debt?.montantFacture || 0;
     const remaining = debt?.solde || 0;
     const paymentProgress = totalInvoiced > 0 ? Math.min(100, (totalPaid / totalInvoiced) * 100) : 0;
-    
+
     return {
       totalPaid,
       totalInvoiced,
@@ -198,7 +198,7 @@ const DebtDetails: React.FC = () => {
         <Alert className={isPenalized ? "border-red-200 bg-red-50" : "border-orange-200 bg-orange-50"}>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            {isPenalized 
+            {isPenalized
               ? `Cette créance est en retard de ${daysLate} jours et est automatiquement pénalisée (0.85% par mois après 60 jours).`
               : `Cette créance est en retard de ${daysLate} jours.`
             }
@@ -321,7 +321,7 @@ const DebtDetails: React.FC = () => {
                       <span>{Math.round(calculatePaymentStats().paymentProgress)}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
-                      <div 
+                      <div
                         className={cn(
                           "h-2.5 rounded-full transition-all duration-300",
                           calculatePaymentStats().paymentProgress === 100 ? "bg-green-600" : "bg-blue-600"
@@ -366,13 +366,13 @@ const DebtDetails: React.FC = () => {
                     <Badge className={cn(
                       "capitalize",
                       reminder.statutRelance === "en_attente" ? "bg-gray-500" :
-                      reminder.statutRelance === "envoyee" ? "bg-orange-500" :
-                      "bg-green-500",
+                        reminder.statutRelance === "envoyee" ? "bg-orange-500" :
+                          "bg-green-500",
                       "text-white"
                     )}>
                       {reminder.statutRelance === "en_attente" ? "En attente" :
-                       reminder.statutRelance === "envoyee" ? "Envoyée" :
-                       "Répondue"}
+                        reminder.statutRelance === "envoyee" ? "Envoyée" :
+                          "Répondue"}
                     </Badge>
                     {reminder.commentaire && (
                       <p className="text-sm text-muted-foreground mt-1">{reminder.commentaire}</p>

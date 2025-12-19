@@ -32,7 +32,7 @@ const PaymentDetails: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const { authToken } = useAuth();
 
-  const API_URL = "http://localhost:8080/api";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
   useEffect(() => {
     const fetchPaymentDetails = async () => {
@@ -202,12 +202,12 @@ const PaymentDetails: React.FC = () => {
                     {payment.modePaiement === "virement"
                       ? "Virement"
                       : payment.modePaiement === "cheque"
-                      ? "Chèque"
-                      : payment.modePaiement === "carte"
-                      ? "Carte"
-                      : payment.modePaiement === "especes"
-                      ? "Espèces"
-                      : payment.modePaiement}
+                        ? "Chèque"
+                        : payment.modePaiement === "carte"
+                          ? "Carte"
+                          : payment.modePaiement === "especes"
+                            ? "Espèces"
+                            : payment.modePaiement}
                   </Badge>
                 </dd>
               </div>
@@ -217,8 +217,8 @@ const PaymentDetails: React.FC = () => {
                   <Badge className={payment.statut === "EFFECTUE" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
                     {payment.statut === "EFFECTUE" ? "Effectué" : "Non effectué"}
                   </Badge>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={handleToggleStatus}
                     className="ml-2"

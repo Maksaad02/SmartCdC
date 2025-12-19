@@ -14,9 +14,9 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   authToken: string | null;
-} 
+}
 
-const API_URL = "http://localhost:8080/api"; // Replace with your Spring Boot API URL
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -29,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const validateStoredToken = async () => {
       const storedToken = localStorage.getItem("auth_token");
       const storedUser = localStorage.getItem("user");
-      
+
       if (storedToken && storedUser) {
         try {
           // Validate token by making a test API call
@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               "Content-Type": "application/json",
             },
           });
-          
+
           if (response.ok) {
             // Token is valid, restore user session
             const userData = await response.json();
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               role: userData.role?.toLowerCase() || "user",
               createdAt: new Date()
             };
-            
+
             setCurrentUser(user);
             setAuthToken(storedToken);
           } else {
@@ -129,11 +129,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // const data: JwtResponse = await response.json();
-      
+
       // Get user info from the token - in a real app, you might want to decode the JWT
       // or make a separate API call to get user details
       const data: JwtResponse = await response.json();
-           console.log("JWT reçu (body): ", data.token);
+      console.log("JWT reçu (body): ", data.token);
 
       // After getting the token, fetch user details
       const userResponse = await fetch(`${API_URL}/utilisateurs/me`, {
@@ -160,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setCurrentUser(user);
       setAuthToken(data.token);
-      
+
       // Store token and user in localStorage
       localStorage.setItem("auth_token", data.token);
       localStorage.setItem("user", JSON.stringify(user));

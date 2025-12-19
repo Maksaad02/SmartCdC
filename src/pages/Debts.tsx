@@ -30,21 +30,21 @@ const Debts: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { authToken } = useAuth();
-  
 
-  const API_URL = "http://localhost:8080/api";
+
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
   useEffect(() => {
     const fetchDebts = async () => {
       try {
         setLoading(true);
         const response = await fetch(`${API_URL}/creances`, {
-              method: "GET",
-              headers: {
-                "Authorization": `Bearer ${authToken}`,
-                "Content-Type": "application/json",
-              }
-            });
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${authToken}`,
+            "Content-Type": "application/json",
+          }
+        });
         if (!response.ok) {
           throw new Error(`Erreur ${response.status}`);
         }
@@ -121,7 +121,7 @@ const Debts: React.FC = () => {
 
             <div className="flex space-x-2">
               {/* Export Excel Button */}
-              <Button 
+              <Button
                 className="bg-debt-blue hover:bg-debt-lightBlue text-white"
                 onClick={handleExportExcel}
               >

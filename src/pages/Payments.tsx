@@ -28,14 +28,14 @@ const Payments: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const { authToken } = useAuth();
-  
-  const API_URL = "http://localhost:8080/api";
+
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
   useEffect(() => {
     const fetchPayments = async () => {
       try {
         setLoading(true);
-        
+
         if (!authToken) {
           throw new Error("Authentication token missing");
         }
@@ -60,8 +60,8 @@ const Payments: React.FC = () => {
       } catch (error) {
         console.error("Error fetching payments:", error);
         toast.error(
-          error instanceof Error 
-            ? error.message 
+          error instanceof Error
+            ? error.message
             : "Failed to load payments"
         );
       } finally {
@@ -76,10 +76,10 @@ const Payments: React.FC = () => {
     const searchLower = searchTerm.toLowerCase();
     return (
       (payment.numFacture?.toLowerCase().includes(searchLower) ||
-      (payment.clientName?.toLowerCase().includes(searchLower)) ||
-      (payment.reference?.toLowerCase().includes(searchLower)) ||
-      payment.modePaiement.toLowerCase().includes(searchLower)
-    ));
+        (payment.clientName?.toLowerCase().includes(searchLower)) ||
+        (payment.reference?.toLowerCase().includes(searchLower)) ||
+        payment.modePaiement.toLowerCase().includes(searchLower)
+      ));
   });
 
   if (loading) {
@@ -104,7 +104,7 @@ const Payments: React.FC = () => {
       <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
         <div className="p-6">
           <h2 className="text-lg font-semibold">Liste des règlements</h2>
-          
+
           <div className="flex justify-between items-center mt-4">
             <div className="relative w-96">
               <Search className="absolute left-2 top-3 h-4 w-4 text-muted-foreground" />
@@ -116,7 +116,7 @@ const Payments: React.FC = () => {
               />
             </div>
           </div>
-          
+
           <div className="mt-6 overflow-x-auto">
             <table className="w-full border-collapse">
               <thead className="bg-muted/50">
@@ -136,7 +136,7 @@ const Payments: React.FC = () => {
                   // Safe access with fallbacks
                   const numFacture = payment.numFacture || "-";
                   const raisonSociale = payment.clientName || "-";
-                  
+
                   return (
                     <tr key={payment.id} className="hover:bg-muted/50">
                       <td className="px-4 py-3 text-sm">{numFacture}</td>
@@ -144,32 +144,30 @@ const Payments: React.FC = () => {
                       <td className="px-4 py-3 text-sm">{formatDate(payment.dateReglement)}</td>
                       <td className="px-4 py-3 text-sm">{formatCurrency(payment.montant)} €</td>
                       <td className="px-4 py-3 text-sm">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          payment.modePaiement === "virement"
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${payment.modePaiement === "virement"
                             ? "bg-green-100 text-green-800"
                             : payment.modePaiement === "cheque"
-                            ? "bg-blue-100 text-blue-800"
-                            : payment.modePaiement === "carte"
-                            ? "bg-orange-100 text-orange-800"
-                            : "bg-gray-100 text-gray-800"
-                        }`}>
+                              ? "bg-blue-100 text-blue-800"
+                              : payment.modePaiement === "carte"
+                                ? "bg-orange-100 text-orange-800"
+                                : "bg-gray-100 text-gray-800"
+                          }`}>
                           {payment.modePaiement === "virement"
                             ? "Virement"
                             : payment.modePaiement === "cheque"
-                            ? "Chèque"
-                            : payment.modePaiement === "carte"
-                            ? "Carte"
-                            : payment.modePaiement === "especes"
-                            ? "Espèces"
-                            : payment.modePaiement}
+                              ? "Chèque"
+                              : payment.modePaiement === "carte"
+                                ? "Carte"
+                                : payment.modePaiement === "especes"
+                                  ? "Espèces"
+                                  : payment.modePaiement}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          payment.statut === "EFFECTUE"
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${payment.statut === "EFFECTUE"
                             ? "bg-green-100 text-green-800"
                             : "bg-yellow-100 text-yellow-800"
-                        }`}>
+                          }`}>
                           {payment.statut === "EFFECTUE" ? "Effectué" : "Non effectué"}
                         </span>
                       </td>
@@ -182,7 +180,7 @@ const Payments: React.FC = () => {
                     </tr>
                   );
                 })}
-                
+
                 {filteredPayments.length === 0 && !loading && (
                   <tr>
                     <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">

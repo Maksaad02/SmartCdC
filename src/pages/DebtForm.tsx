@@ -36,11 +36,13 @@ const DebtForm = () => {
     actions: ""
   });
 
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+
   // Fetch clients
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const response = await fetch("http://localhost:8080/api/clients", {
+        const response = await fetch(`${API_URL}/clients`, {
           headers: {
             Authorization: `Bearer ${authToken}`
           }
@@ -61,7 +63,7 @@ const DebtForm = () => {
       const fetchDebt = async () => {
         setLoading(true);
         try {
-          const response = await fetch(`http://localhost:8080/api/creances/${id}`, {
+          const response = await fetch(`${API_URL}/creances/${id}`, {
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${authToken}`
@@ -146,8 +148,8 @@ const DebtForm = () => {
 
     try {
       const url = isEditing
-        ? `http://localhost:8080/api/creances/${id}`
-        : "http://localhost:8080/api/creances";
+        ? `${API_URL}/creances/${id}`
+        : `${API_URL}/creances`;
 
       const response = await fetch(url, {
         method: isEditing ? "PUT" : "POST",
@@ -193,8 +195,8 @@ const DebtForm = () => {
         <CardHeader>
           <CardTitle>Informations de la créance</CardTitle>
           <CardDescription>
-            {isEditing 
-              ? "Modifiez les informations de la créance. Le numéro de facture ne peut pas être modifié." 
+            {isEditing
+              ? "Modifiez les informations de la créance. Le numéro de facture ne peut pas être modifié."
               : "Remplissez les informations pour créer une nouvelle créance."}
           </CardDescription>
         </CardHeader>
@@ -211,7 +213,7 @@ const DebtForm = () => {
                 <Alert className={isPenalized ? "border-red-200 bg-red-50" : "border-orange-200 bg-orange-50"}>
                   <Info className="h-4 w-4" />
                   <AlertDescription>
-                    {isPenalized 
+                    {isPenalized
                       ? `Cette créance est en retard de ${daysLate} jours et sera automatiquement pénalisée (0.85% par mois après 60 jours).`
                       : `Cette créance est en retard de ${daysLate} jours.`
                     }

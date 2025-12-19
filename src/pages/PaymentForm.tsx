@@ -36,12 +36,13 @@ const PaymentForm = () => {
   });
 
   const [debtsWithClients, setDebtsWithClients] = useState<any[]>([]);
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
   // Fetch debts with remaining balance
   useEffect(() => {
     const fetchDebts = async () => {
       try {
-        const response = await fetch("http://localhost:8080/api/creances", {
+        const response = await fetch(`${API_URL}/creances`, {
           method: "GET",
           headers: {
             "Authorization": `Bearer ${authToken}`,
@@ -56,7 +57,7 @@ const PaymentForm = () => {
 
         const debts = await response.json();
         console.log("Fetched debts:", debts); // Debug log
-        
+
         // Filter debts with remaining balance and include penalties
         const debtsWithRemaining = debts
           .map((debt: any) => ({
@@ -85,7 +86,7 @@ const PaymentForm = () => {
       const fetchPayment = async () => {
         setLoading(true);
         try {
-          const response = await fetch(`http://localhost:8080/api/reglements/${id}`, {
+          const response = await fetch(`${API_URL}/reglements/${id}`, {
             headers: {
               "Authorization": `Bearer ${authToken}`,
               "Content-Type": "application/json"
@@ -128,16 +129,16 @@ const PaymentForm = () => {
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }));
-    
+
     // If debt is selected, set the default amount to the remaining balance
     if (name === "debtId") {
       const selectedDebt = debtsWithClients.find(d => d.numFacture === value);
       if (selectedDebt) {
         console.log("Selected debt:", selectedDebt); // Debug log
-        setFormData(prev => ({ 
-          ...prev, 
+        setFormData(prev => ({
+          ...prev,
           debtId: value,
-          montantEncaisse: selectedDebt.remaining.toString() 
+          montantEncaisse: selectedDebt.remaining.toString()
         }));
       }
     }
@@ -146,7 +147,7 @@ const PaymentForm = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     console.log(authToken)  // check if the token is available
     e.preventDefault();
-    
+
     // Validation
     if (!formData.debtId || !formData.montantEncaisse || !formData.dateReglement || !formData.modePaiement) {
       toast.error("Veuillez remplir tous les champs obligatoires");
@@ -156,28 +157,28 @@ const PaymentForm = () => {
     // Additional validation for payment amount
     const selectedDebt = debtsWithClients.find(d => d.numFacture === formData.debtId);
     const paymentAmount = parseFloat(formData.montantEncaisse);
-    
+
     if (!selectedDebt) {
       toast.error("Veuillez sélectionner une créance valide");
       return;
     }
-    
+
     if (paymentAmount <= 0) {
       toast.error("Le montant du paiement doit être supérieur à 0");
       return;
     }
-    
+
     if (paymentAmount > selectedDebt.remaining) {
       const totalWithPenalties = selectedDebt.totalWithPenalties;
       const alreadyPaid = selectedDebt.montantEncaisse;
       const remainingWithPenalties = selectedDebt.remaining;
-      
+
       let errorMessage = `Le montant du paiement ne peut pas dépasser le solde restant (${formatCurrency(remainingWithPenalties)} MAD)`;
-      
+
       if (selectedDebt.hasPenalties) {
         errorMessage += `\n\nDétail :\n- Montant facturé : ${formatCurrency(selectedDebt.montantFacture)} MAD\n- Pénalités : ${formatCurrency(selectedDebt.montantPenalites)} MAD\n- Total : ${formatCurrency(totalWithPenalties)} MAD\n- Déjà payé : ${formatCurrency(alreadyPaid)} MAD`;
       }
-      
+
       toast.error(errorMessage);
       return;
     }
@@ -194,8 +195,8 @@ const PaymentForm = () => {
 
     try {
       const url = isEditing
-        ? `http://localhost:8080/api/reglements/${id}`
-        : "http://localhost:8080/api/reglements";
+        ? `${API_URL}/reglements/${id}`
+        : `${API_URL}/reglements`;
 
       const methode = isEditing ? "PUT" : "POST";
 
@@ -251,7 +252,7 @@ const PaymentForm = () => {
                     <SelectContent>
                       {debtsWithClients.map((debt: any) => (
                         <SelectItem key={debt.numFacture} value={debt.numFacture}>
-                          {debt.numFacture} - {debt.clientName} 
+                          {debt.numFacture} - {debt.clientName}
                           {debt.hasPenalties ? (
                             <span className="text-red-600">
                               {" "}({formatCurrency(debt.totalWithPenalties)} MAD incl. pénalités)
@@ -266,7 +267,7 @@ const PaymentForm = () => {
                       ))}
                     </SelectContent>
                   </Select>
-                  
+
                   {/* Information sur la créance sélectionnée */}
                   {formData.debtId && (() => {
                     const selectedDebt = debtsWithClients.find(d => d.numFacture === formData.debtId);
