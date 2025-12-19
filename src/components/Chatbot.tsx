@@ -1,7 +1,8 @@
 // src/components/Chatbot.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react"; // 1. Import useEffect & useRef
 import { Send, MessageCircle, Loader2 } from "lucide-react";
 import { askChatbot } from "../utils/chatbotApi";
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   id: number;
@@ -16,6 +17,14 @@ const Chatbot: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 2. Create a reference for the bottom of the chat
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 3. Automatically scroll to bottom whenever 'messages' or 'loading' changes
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
@@ -26,9 +35,7 @@ const Chatbot: React.FC = () => {
     setError(null);
 
     try {
-      // Call the real RAG chatbot API
       const botResponse = await askChatbot(userMessage.text);
-
       const botMessage: Message = {
         id: Date.now() + 1,
         sender: "bot",
@@ -38,8 +45,6 @@ const Chatbot: React.FC = () => {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Une erreur est survenue";
       setError(errorMessage);
-
-      // Add error message to chat
       const botMessage: Message = {
         id: Date.now() + 1,
         sender: "bot",
@@ -62,19 +67,14 @@ const Chatbot: React.FC = () => {
       </button>
 
       {open && (
-        <div className="fixed bottom-20 right-6 w-96 bg-white border border-gray-300 rounded-lg shadow-xl flex flex-col z-50">
-          <div className="flex justify-between items-center bg-blue-500 text-white px-4 py-3 rounded-t-lg">
+        <div className="fixed bottom-20 right-6 w-96 h-[500px] bg-white border border-gray-300 rounded-lg shadow-xl flex flex-col z-50 overflow-hidden">
+          <div className="flex-none flex justify-between items-center bg-blue-500 text-white px-4 py-3">
             <span className="font-semibold">RecOuVTek Chatbot AI</span>
-            <button
-              onClick={() => setOpen(false)}
-              className="hover:bg-blue-600 rounded px-2 py-1 transition"
-              aria-label="Fermer"
-            >
-              ✕
-            </button>
+            <button onClick={() => setOpen(false)} className="hover:bg-blue-600 rounded px-2">✕</button>
           </div>
 
-          <div className="flex-1 p-4 overflow-y-auto space-y-3 h-96 bg-gray-50">
+          {/* Chat Messages Area */}
+          <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-gray-50">
             {messages.length === 0 && (
               <div className="text-center text-gray-500 mt-8">
                 <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-400" />
@@ -88,12 +88,15 @@ const Chatbot: React.FC = () => {
                 className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`p-3 rounded-lg max-w-[80%] ${msg.sender === "user"
+                  className={`p-3 rounded-lg max-w-[80%] ${
+                    msg.sender === "user"
                       ? "bg-blue-500 text-white rounded-br-none"
                       : "bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm"
-                    }`}
+                  }`}
                 >
-                  <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                  <div className={`text-sm ${msg.sender === "user" ? "text-white" : "text-gray-800"}`}>
+                    <ReactMarkdown>{msg.text}</ReactMarkdown>
+                  </div>
                 </div>
               </div>
             ))}
@@ -108,8 +111,12 @@ const Chatbot: React.FC = () => {
                 </div>
               </div>
             )}
+            
+            {/* 4. Invisible div that the view scrolls to */}
+            <div ref={messagesEndRef} />
           </div>
 
+          {/* Input Area */}
           <div className="flex border-t border-gray-200 bg-white rounded-b-lg">
             <input
               type="text"
@@ -140,4 +147,3 @@ const Chatbot: React.FC = () => {
 };
 
 export default Chatbot;
-
