@@ -1,24 +1,24 @@
-
 import React from "react";
 import { Outlet, Navigate } from "react-router-dom";
-import Sidebar from "./Sidebar";
+import Navbar from "./Navbar";
 import { useAuth } from "../contexts/AuthContext";
+import Chatbot from "./Chatbot";
+
 
 const Layout: React.FC = () => {
   const { isAuthenticated } = useAuth();
-  
+
   if (!isAuthenticated) {
     return <Navigate to="/login" />;
   }
-  
+
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar />
-      <div className="flex-1 ml-64 overflow-auto">
-        <main className="p-6">
-          <Outlet />
-        </main>
-      </div>
+    <div className="min-h-screen bg-[#F3F4F6]">
+      <Navbar />
+      <main className="pt-16 px-6">
+        <Outlet />
+        <Chatbot />
+      </main>
     </div>
   );
 };
