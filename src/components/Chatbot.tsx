@@ -69,7 +69,7 @@ const Chatbot: React.FC = () => {
       {open && (
         <div className="fixed bottom-20 right-6 w-96 h-[500px] bg-white border border-gray-300 rounded-lg shadow-xl flex flex-col z-50 overflow-hidden">
           <div className="flex-none flex justify-between items-center bg-blue-500 text-white px-4 py-3">
-            <span className="font-semibold">RecOuVTek Chatbot AI</span>
+            <span className="font-semibold">Cdc Smart Bot </span>
             <button onClick={() => setOpen(false)} className="hover:bg-blue-600 rounded px-2">✕</button>
           </div>
 
@@ -78,7 +78,7 @@ const Chatbot: React.FC = () => {
             {messages.length === 0 && (
               <div className="text-center text-gray-500 mt-8">
                 <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm">Posez-moi des questions sur RecOuvTek !</p>
+                <p className="text-sm">Posez-moi des questions sur CDC !</p>
               </div>
             )}
 
