@@ -13,8 +13,8 @@ public class ChatAiService {
     private final ChatClient chatClient;
 
     public ChatAiService(ChatClient.Builder builder,
-            VectorStore vectorStore,
-            BackendApiTool backendApiTool) {
+                         VectorStore vectorStore,
+                         BackendApiTool backendApiTool) {
         this.chatClient = builder
                 .defaultSystem(SystemPrompts.DATABASE_SCHEMA)
                 .defaultTools(backendApiTool)
