@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 
 @Entity
 @Getter
@@ -18,8 +19,8 @@ public class Reglement {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
 
-    @Column(name = "montant")
-    private Double montant;
+    @Column(name = "montant", precision = 19, scale = 2)
+    private BigDecimal montant;
 
     @Column(name = "date_reglement")
     private LocalDate dateReglement;

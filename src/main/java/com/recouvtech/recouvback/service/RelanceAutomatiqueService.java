@@ -81,12 +81,16 @@ public class RelanceAutomatiqueService {
         relance.setDateRelance(creance.getEcheance().plusDays(60)); // Date programmée = 60 jours après échéance
         relance.setDateCreation(LocalDateTime.now()); // Date de création = maintenant
         relance.setDateProgrammee(LocalDateTime.now().plusDays(60)); // Date suggérée pour envoi
-        relance.setMessage("ATTENTION - PÉNALITÉS APPLIQUÉES : Votre facture N°" + creance.getNumFacture() +
+        // Le taux provient de PenaliteService : la valeur 0.83% ecrite en dur ici
+        // ne correspondait pas au 0.85% reellement facture, et le message annoncait
+        // des penalites deja appliquees alors qu'elles restent nulles jusqu'a J+90.
+        relance.setMessage("ATTENTION - ÉCHÉANCE DÉPASSÉE DE 60 JOURS : Votre facture N°" + creance.getNumFacture() +
                           " est en retard depuis 60 jours. " +
-                          "Des pénalités de 0.83% par mois sur le montant initial (" +
-                          creance.getMontantFacture() + " MAD) sont maintenant appliquées. " +
-                          "Le montant total à régler inclut ces pénalités. " +
-                          "Veuillez régulariser votre situation rapidement.");
+                          "À compter du 90e jour de retard, des pénalités de "
+                          + PenaliteService.tauxMensuelPourcent() +
+                          "% par mois seront appliquées sur le montant initial (" +
+                          creance.getMontantFacture() + " MAD). " +
+                          "Veuillez régulariser votre situation rapidement pour les éviter.");
 
         relanceService.save(relance);
     }

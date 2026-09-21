@@ -20,4 +20,7 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
             "c.ice = :query OR " +
             "c.telephone = :query")
     List<Client> searchByKeyword(@Param("query") String query);
+
+    /** Portefeuille d'un agent : utilise pour le cloisonnement horizontal. */
+    List<Client> findByAgentRecouv_Email(String email);
 }

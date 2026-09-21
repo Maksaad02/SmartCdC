@@ -1,10 +1,8 @@
 package com.recouvtech.recouvback.service;
 
 // Importing required classes
-import java.io.File;
 //import javax.mail.MessagingException;
 //import javax.mail.internet.MimeMessage;
-import com.recouvtech.recouvback.entity.EmailDetails;
 import com.recouvtech.recouvback.entity.Relance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,8 +12,7 @@ import org.springframework.stereotype.Service;
 
 // Annotation
 @Service
-// Class
-// Implementing EmailService interface
+@lombok.extern.slf4j.Slf4j
 public class EmailServiceImpl implements EmailService {
 
     @Autowired
@@ -33,35 +30,6 @@ public class EmailServiceImpl implements EmailService {
         }
         return null;
     }/**  RECENTLY ADDED*/
-
-    // Method 1
-    // To send a simple email
-    public String sendSimpleMail(EmailDetails details)
-    {
-
-        // Try block to check for exceptions
-        try {
-
-            // Creating a simple mail message
-            SimpleMailMessage mailMessage
-                    = new SimpleMailMessage();
-
-            // Setting up necessary details
-            mailMessage.setFrom(sender);
-            mailMessage.setTo(details.getRecipient());
-            mailMessage.setText(details.getMsgBody());
-            mailMessage.setSubject(details.getSubject());
-
-            // Sending the mail
-            javaMailSender.send(mailMessage);
-            return "Mail Sent Successfully...";
-        }
-
-        // Catch block to handle the exceptions
-        catch (Exception e) {
-            return "Error while Sending Mail";
-        }
-    }
 
     // Method 2
     // To send reminder emails
@@ -90,10 +58,9 @@ public class EmailServiceImpl implements EmailService {
             return "Relance envoyée avec succès";
         }
         catch (Exception e) {
-            // Log the full error for debugging
-            System.err.println("Erreur détaillée lors de l'envoi de la relance: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Erreur lors de l'envoi de la relance: " + e.getMessage(), e);
+            log.error("Échec d'envoi de la relance pour la facture {}",
+                    relance.getCreance() != null ? relance.getCreance().getNumFacture() : "?", e);
+            throw new RuntimeException("Erreur lors de l'envoi de la relance", e);
         }
     }
 }

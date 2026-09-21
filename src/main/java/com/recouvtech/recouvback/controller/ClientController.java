@@ -4,6 +4,7 @@ import com.recouvtech.recouvback.dto.ClientDTO.ClientRequestDTO;
 import com.recouvtech.recouvback.dto.ClientDTO.ClientResponseDTO;
 import com.recouvtech.recouvback.service.ClientService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -11,7 +12,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/clients")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:8081")
 public class ClientController {
 
     private final ClientService clientService;
@@ -36,6 +36,7 @@ public class ClientController {
         return clientService.updateClient(id, dto);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public void deleteClient(@PathVariable Long id) {
         clientService.deleteClient(id);

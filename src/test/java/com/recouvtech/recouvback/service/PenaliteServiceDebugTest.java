@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.*;
+import java.math.BigDecimal;
 
 class PenaliteServiceDebugTest {
 
@@ -20,12 +21,12 @@ class PenaliteServiceDebugTest {
         creance.setId(3L);
         creance.setNumFacture("F2025-603");
         creance.setEcheance(LocalDate.now().minusDays(91)); // 91 days ago
-        creance.setMontantFacture(300000.0);
-        creance.setMontantEncaisse(0.0);
+        creance.setMontantFacture(BigDecimal.valueOf(300000.0));
+        creance.setMontantEncaisse(BigDecimal.valueOf(0.0));
         
         // Test the calculation
         int joursRetard = penaliteService.calculerJoursRetard(creance);
-        Double penalites = penaliteService.calculerPenalites(creance);
+        BigDecimal penalites = penaliteService.calculerPenalites(creance);
         
         System.out.println("Days overdue: " + joursRetard);
         System.out.println("Penalties calculated: " + penalites);
@@ -35,7 +36,7 @@ class PenaliteServiceDebugTest {
         assertEquals(91, joursRetard);
         
         // Should have penalties: 300,000 * 0.0085 * 1 = 2,550 DH
-        assertEquals(2550.0, penalites);
+        assertEquals(0, BigDecimal.valueOf(2550.0).compareTo(penalites));
     }
     
     @Test
@@ -47,12 +48,12 @@ class PenaliteServiceDebugTest {
         creance.setId(3L);
         creance.setNumFacture("F2025-603");
         creance.setEcheance(LocalDate.of(2025, 6, 21)); // Future date!
-        creance.setMontantFacture(300000.0);
-        creance.setMontantEncaisse(0.0);
+        creance.setMontantFacture(BigDecimal.valueOf(300000.0));
+        creance.setMontantEncaisse(BigDecimal.valueOf(0.0));
         
         // Test the calculation
         int joursRetard = penaliteService.calculerJoursRetard(creance);
-        Double penalites = penaliteService.calculerPenalites(creance);
+        BigDecimal penalites = penaliteService.calculerPenalites(creance);
         
         System.out.println("Due date: " + creance.getEcheance());
         System.out.println("Current date: " + LocalDate.now());
@@ -62,7 +63,7 @@ class PenaliteServiceDebugTest {
         // If the due date is in the future, there should be no penalties
         if (LocalDate.now().isBefore(creance.getEcheance())) {
             assertEquals(0, joursRetard);
-            assertEquals(0.0, penalites);
+            assertEquals(0, BigDecimal.valueOf(0.0).compareTo(penalites));
         }
     }
 }

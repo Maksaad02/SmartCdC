@@ -2,14 +2,17 @@ package com.recouvtech.recouvback.filter;
 
 import com.recouvtech.recouvback.configuration.JwtUtils;
 import com.recouvtech.recouvback.service.CustomUserDetailsService;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -18,6 +21,7 @@ import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtils jwtUtils;
@@ -30,22 +34,32 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String authHeader = request.getHeader("Authorization");
-        System.out.println("Auth header: " + authHeader); // Debug log
+
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String jwtToken = authHeader.substring(7);
-            System.out.println("Extracted token: " + jwtToken); // Debug log
-            String username = jwtUtils.extractUsername(jwtToken);
+            try {
+                String username = jwtUtils.extractUsername(jwtToken);
 
-            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                if (jwtUtils.isTokenValid(jwtToken, userDetails.getUsername())) {
-                    UsernamePasswordAuthenticationToken authToken =
-                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                    if (jwtUtils.isTokenValid(jwtToken, userDetails.getUsername())) {
+                        UsernamePasswordAuthenticationToken authToken =
+                                new UsernamePasswordAuthenticationToken(
+                                        userDetails, null, userDetails.getAuthorities());
+                        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        SecurityContextHolder.getContext().setAuthentication(authToken);
+                    }
                 }
+            } catch (JwtException | UsernameNotFoundException e) {
+                // Jeton expire, malforme ou signature invalide : on laisse passer sans
+                // authentifier, l'AuthenticationEntryPoint repondra 401. Auparavant
+                // l'exception remontait et produisait une 500 avec stacktrace.
+                // Le jeton lui-meme n'est jamais journalise.
+                SecurityContextHolder.clearContext();
+                log.debug("Jeton JWT rejeté : {}", e.getClass().getSimpleName());
             }
         }
+
         filterChain.doFilter(request, response);
     }
 }

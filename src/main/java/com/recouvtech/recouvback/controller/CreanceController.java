@@ -5,6 +5,7 @@ import com.recouvtech.recouvback.dto.CreanceDTO.CreanceResponseDTO;
 import com.recouvtech.recouvback.service.CreanceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -12,7 +13,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/creances")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class CreanceController {
 
     private final CreanceService creanceService;
@@ -37,11 +37,13 @@ public class CreanceController {
         return creanceService.updateCreance(numFacture, dto);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{numFacture}")
     public void delete(@PathVariable String numFacture) {
         creanceService.deleteCreance(numFacture);
     }
     
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/recalculer-penalites")
     public ResponseEntity<String> recalculerPenalites() {
         creanceService.recalculerToutesPenalites();

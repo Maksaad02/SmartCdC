@@ -21,4 +21,10 @@ public interface CreanceRepository extends JpaRepository<Creance, Long> {
      * Find all debts for a specific client (for External Chatbot API)
      */
     List<Creance> findByClientId(Long clientId);
+
+    /** Portefeuille d'un agent : utilise pour le cloisonnement horizontal. */
+    List<Creance> findByAgentRecouv_Email(String email);
+
+    /** Creance appartenant a l'agent donne (null si elle existe mais ne lui appartient pas). */
+    Creance findByNumFactureAndAgentRecouv_Email(String numFacture, String email);
 }

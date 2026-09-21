@@ -10,6 +10,8 @@ import com.recouvtech.recouvback.dao.CreanceRepository;
 import com.recouvtech.recouvback.dao.RelanceRepository;
 import com.recouvtech.recouvback.dao.UtilisateurRepository;
 import com.recouvtech.recouvback.mapper.RelanceMapper;
+import com.recouvtech.recouvback.security.CurrentUser;
+import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +33,9 @@ public class RelanceService {
     @Autowired
     private EmailService emailService;
 
+    @Autowired
+    private CurrentUser currentUser;
+
     public RelanceResponseDTO create(RelanceRequestDTO dto) {
         Creance creance = creanceRepository.findByNumFacture(dto.getNumFacture());
         Utilisateur agent = utilisateurRepository.findByNom(dto.getAgentName());
@@ -42,16 +47,35 @@ public class RelanceService {
     }
 
     public List<RelanceResponseDTO> getAll() {
-        return relanceRepository.findAll().stream().map(RelanceMapper::toDto).collect(Collectors.toList());
+        // Cloisonne sur le portefeuille de l'appelant, via la creance rattachee.
+        return relanceRepository.findAll().stream()
+                .filter(this::canAccess)
+                .map(RelanceMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     public RelanceResponseDTO getById(Long id) {
-        return relanceRepository.findById(id).map(RelanceMapper::toDto)
+        Relance r = relanceRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Not found"));
+        assertCanAccess(r);
+        return RelanceMapper.toDto(r);
+    }
+
+    private boolean canAccess(Relance r) {
+        Creance c = r.getCreance();
+        String ownerEmail = (c != null && c.getAgentRecouv() != null) ? c.getAgentRecouv().getEmail() : null;
+        return currentUser.canAccess(ownerEmail);
+    }
+
+    private void assertCanAccess(Relance r) {
+        if (!canAccess(r)) {
+            throw new AccessDeniedException("Cette relance n'appartient pas à votre portefeuille");
+        }
     }
 
     public RelanceResponseDTO update(Long id, RelanceRequestDTO dto) {
         Relance r = relanceRepository.findById(id).orElseThrow();
+        assertCanAccess(r);
         Creance creance = creanceRepository.findByNumFacture(dto.getNumFacture());
         Utilisateur agent = utilisateurRepository.findByNom(dto.getAgentName());
         RelanceMapper.updateFromRequestDto(r, dto, creance, agent);
@@ -59,7 +83,10 @@ public class RelanceService {
     }
 
     public void delete(Long id) {
-        relanceRepository.deleteById(id);
+        Relance r = relanceRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Not found"));
+        assertCanAccess(r);
+        relanceRepository.delete(r);
     }
 
     /**
@@ -115,6 +142,7 @@ public class RelanceService {
     public List<RelanceResponseDTO> getRelancesEnAttente() {
         return relanceRepository.findByStatutRelance(StatutRelance.EN_ATTENTE)
             .stream()
+            .filter(this::canAccess)
             .map(RelanceMapper::toDto)
             .collect(Collectors.toList());
     }
@@ -125,6 +153,7 @@ public class RelanceService {
     public List<RelanceResponseDTO> getRelancesEnAttenteByCreance(String numFacture) {
         return relanceRepository.findByCreanceNumFactureAndStatutRelance(numFacture, StatutRelance.EN_ATTENTE)
             .stream()
+            .filter(this::canAccess)
             .map(RelanceMapper::toDto)
             .collect(Collectors.toList());
     }

@@ -11,6 +11,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -25,6 +26,7 @@ import java.util.Arrays;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -38,11 +40,17 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        // External Chatbot API - secured by API Key filter
-                        .requestMatchers("/api/external/**").permitAll()
+                        // API chatbot : double controle. ApiKeyAuthFilter verifie la cle de
+                        // service, et .authenticated() impose en plus un JWT utilisateur valide,
+                        // pour que le chatbot herite exactement des droits de l'agent appelant
+                        // au lieu de disposer d'un acces global non cloisonne.
+                        .requestMatchers("/api/external/**").authenticated()
 
-                        // Autorise ces routes sans authentification
-                        .requestMatchers("/api/register", "/api/login").permitAll()
+                        // Seul le login est public. La creation de compte est reservee aux ADMIN
+                        // (voir C-5 : /api/register ouvert + /utilisateurs/{id}/role non protege
+                        // permettait a un anonyme de devenir ADMIN en deux requetes).
+                        .requestMatchers("/api/login").permitAll()
+                        .requestMatchers("/api/register").hasRole("ADMIN")
                         // .requestMatchers(HttpMethod.GET, "/api/reglements/**").permitAll() // ⬅️
                         // Allow GET on reglements
                         // Autoriser les preflight CORS (navigateur)

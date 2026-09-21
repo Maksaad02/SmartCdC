@@ -154,7 +154,7 @@ import jwt
 import os
 from typing import Optional
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "monSuperSecretJWTkeyDePlusDe32Caracteres")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "<votre-JWT_SECRET>")
 
 def verify_token(token: str) -> bool:
     """Verify JWT token from Spring Boot"""
@@ -185,7 +185,7 @@ class Settings(BaseSettings):
     spring_boot_url: str = "http://localhost:8080"
     
     # JWT
-    jwt_secret_key: str = "monSuperSecretJWTkeyDePlusDe32Caracteres"
+    jwt_secret_key: str = "<votre-JWT_SECRET>"
     
     class Config:
         env_file = ".env"
@@ -236,7 +236,7 @@ Add to your existing `docker-compose.yml`:
       - DATABASE_URL=jdbc:mysql://database:3306/recouvdb?user=root&password=${MYSQL_ROOT_PASSWORD}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SPRING_BOOT_URL=http://backend:8080
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-monSuperSecretJWTkeyDePlusDe32Caracteres}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-<votre-JWT_SECRET>}
     depends_on:
       - database
       - backend
@@ -258,7 +258,7 @@ Create `RecOuVTeK_AI/.env`:
 OPENAI_API_KEY=your_openai_api_key_here
 DATABASE_URL=mysql+pymysql://root:Maksaad@database:3306/recouvdb
 SPRING_BOOT_URL=http://backend:8080
-JWT_SECRET_KEY=monSuperSecretJWTkeyDePlusDe32Caracteres
+JWT_SECRET_KEY=<votre-JWT_SECRET>
 ```
 
 ## Step 9: Run the Service

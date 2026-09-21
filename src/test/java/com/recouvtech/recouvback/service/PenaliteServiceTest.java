@@ -12,6 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.*;
+import java.math.BigDecimal;
 
 @ExtendWith(MockitoExtension.class)
 class PenaliteServiceTest {
@@ -39,8 +40,8 @@ class PenaliteServiceTest {
         creance = new Creance();
         creance.setId(1L);
         creance.setNumFacture("FACT-001");
-        creance.setMontantFacture(10000.0);
-        creance.setMontantEncaisse(0.0);
+        creance.setMontantFacture(BigDecimal.valueOf(10000.0));
+        creance.setMontantEncaisse(BigDecimal.valueOf(0.0));
         creance.setClient(client);
         creance.setAgentRecouv(agent);
     }
@@ -99,10 +100,10 @@ class PenaliteServiceTest {
         creance.setEcheance(null);
         
         // When: calculating penalties
-        Double penalites = penaliteService.calculerPenalites(creance);
+        BigDecimal penalites = penaliteService.calculerPenalites(creance);
         
         // Then: should return 0
-        assertEquals(0.0, penalites);
+        assertEquals(0, BigDecimal.valueOf(0.0).compareTo(penalites));
     }
 
     @Test
@@ -111,10 +112,10 @@ class PenaliteServiceTest {
         creance.setEcheance(LocalDate.now().minusDays(30));
         
         // When: calculating penalties
-        Double penalites = penaliteService.calculerPenalites(creance);
+        BigDecimal penalites = penaliteService.calculerPenalites(creance);
         
         // Then: should return 0 (below 60 days threshold)
-        assertEquals(0.0, penalites);
+        assertEquals(0, BigDecimal.valueOf(0.0).compareTo(penalites));
     }
 
     @Test
@@ -123,10 +124,10 @@ class PenaliteServiceTest {
         creance.setEcheance(LocalDate.now().minusDays(60));
         
         // When: calculating penalties
-        Double penalites = penaliteService.calculerPenalites(creance);
+        BigDecimal penalites = penaliteService.calculerPenalites(creance);
         
         // Then: should return 0 (exactly at threshold, no complete months after)
-        assertEquals(0.0, penalites);
+        assertEquals(0, BigDecimal.valueOf(0.0).compareTo(penalites));
     }
 
     @Test
@@ -135,10 +136,10 @@ class PenaliteServiceTest {
         creance.setEcheance(LocalDate.now().minusDays(90));
         
         // When: calculating penalties
-        Double penalites = penaliteService.calculerPenalites(creance);
+        BigDecimal penalites = penaliteService.calculerPenalites(creance);
         
         // Then: should return 85 DH (10000 * 0.0085 * 1)
-        assertEquals(85.0, penalites);
+        assertEquals(0, BigDecimal.valueOf(85.0).compareTo(penalites));
     }
 
     @Test
@@ -147,10 +148,10 @@ class PenaliteServiceTest {
         creance.setEcheance(LocalDate.now().minusDays(120));
         
         // When: calculating penalties
-        Double penalites = penaliteService.calculerPenalites(creance);
+        BigDecimal penalites = penaliteService.calculerPenalites(creance);
         
         // Then: should return 170 DH (10000 * 0.0085 * 2)
-        assertEquals(170.0, penalites);
+        assertEquals(0, BigDecimal.valueOf(170.0).compareTo(penalites));
     }
 
     @Test
@@ -159,10 +160,10 @@ class PenaliteServiceTest {
         creance.setEcheance(LocalDate.now().minusDays(150));
         
         // When: calculating penalties
-        Double penalites = penaliteService.calculerPenalites(creance);
+        BigDecimal penalites = penaliteService.calculerPenalites(creance);
         
         // Then: should return 255 DH (10000 * 0.0085 * 3)
-        assertEquals(255.0, penalites);
+        assertEquals(0, BigDecimal.valueOf(255.0).compareTo(penalites));
     }
 
     @Test
@@ -171,10 +172,10 @@ class PenaliteServiceTest {
         creance.setEcheance(LocalDate.now().minusDays(89));
         
         // When: calculating penalties
-        Double penalites = penaliteService.calculerPenalites(creance);
+        BigDecimal penalites = penaliteService.calculerPenalites(creance);
         
         // Then: should return 0 (29 days after threshold, not a complete month)
-        assertEquals(0.0, penalites);
+        assertEquals(0, BigDecimal.valueOf(0.0).compareTo(penalites));
     }
 
     @Test
@@ -183,36 +184,36 @@ class PenaliteServiceTest {
         creance.setEcheance(LocalDate.now().minusDays(91));
         
         // When: calculating penalties
-        Double penalites = penaliteService.calculerPenalites(creance);
+        BigDecimal penalites = penaliteService.calculerPenalites(creance);
         
         // Then: should return 85 DH (10000 * 0.0085 * 1)
-        assertEquals(85.0, penalites);
+        assertEquals(0, BigDecimal.valueOf(85.0).compareTo(penalites));
     }
 
     @Test
     void testCalculerPenalites_DifferentAmounts() {
         // Given: creance with different amounts
-        creance.setMontantFacture(5000.0);
+        creance.setMontantFacture(BigDecimal.valueOf(5000.0));
         creance.setEcheance(LocalDate.now().minusDays(90));
         
         // When: calculating penalties
-        Double penalites = penaliteService.calculerPenalites(creance);
+        BigDecimal penalites = penaliteService.calculerPenalites(creance);
         
         // Then: should return 42.5 DH (5000 * 0.0085 * 1)
-        assertEquals(42.5, penalites);
+        assertEquals(0, BigDecimal.valueOf(42.5).compareTo(penalites));
     }
 
     @Test
     void testCalculerPenalites_Rounding() {
         // Given: creance with amount that would result in decimal places
-        creance.setMontantFacture(1000.0);
+        creance.setMontantFacture(BigDecimal.valueOf(1000.0));
         creance.setEcheance(LocalDate.now().minusDays(90));
         
         // When: calculating penalties
-        Double penalites = penaliteService.calculerPenalites(creance);
+        BigDecimal penalites = penaliteService.calculerPenalites(creance);
         
         // Then: should return 8.5 DH (1000 * 0.0085 * 1) and be properly rounded
-        assertEquals(8.5, penalites);
+        assertEquals(0, BigDecimal.valueOf(8.5).compareTo(penalites));
     }
 
     @Test
@@ -225,7 +226,7 @@ class PenaliteServiceTest {
         penaliteService.mettreAJourPenalites(creance);
         
         // Then: penalties should be calculated and date set
-        assertEquals(85.0, creance.getMontantPenalites());
+        assertEquals(0, BigDecimal.valueOf(85.0).compareTo(creance.getMontantPenalites()));
         assertEquals(LocalDate.now(), creance.getDateCalculPenalites());
     }
 
@@ -233,28 +234,28 @@ class PenaliteServiceTest {
     void testMettreAJourPenalites_AlreadyCalculatedToday() {
         // Given: creance already calculated today
         creance.setEcheance(LocalDate.now().minusDays(90));
-        creance.setMontantPenalites(50.0);
+        creance.setMontantPenalites(BigDecimal.valueOf(50.0));
         creance.setDateCalculPenalites(LocalDate.now());
         
         // When: updating penalties
         penaliteService.mettreAJourPenalites(creance);
         
         // Then: penalties should not be recalculated
-        assertEquals(50.0, creance.getMontantPenalites());
+        assertEquals(0, BigDecimal.valueOf(50.0).compareTo(creance.getMontantPenalites()));
     }
 
     @Test
     void testForcerRecalculPenalites() {
         // Given: creance with existing penalties
         creance.setEcheance(LocalDate.now().minusDays(90));
-        creance.setMontantPenalites(50.0);
+        creance.setMontantPenalites(BigDecimal.valueOf(50.0));
         creance.setDateCalculPenalites(LocalDate.now().minusDays(1));
         
         // When: forcing recalculation
         penaliteService.forcerRecalculPenalites(creance);
         
         // Then: penalties should be recalculated
-        assertEquals(85.0, creance.getMontantPenalites());
+        assertEquals(0, BigDecimal.valueOf(85.0).compareTo(creance.getMontantPenalites()));
         assertEquals(LocalDate.now(), creance.getDateCalculPenalites());
     }
 
@@ -264,10 +265,10 @@ class PenaliteServiceTest {
         creance.setEcheance(LocalDate.now().minusDays(90));
         
         // When: calculating penalties
-        Double penalites = penaliteService.calculerPenalites(creance);
+        BigDecimal penalites = penaliteService.calculerPenalites(creance);
         
         // Then: should return 1 month penalty
-        assertEquals(85.0, penalites);
+        assertEquals(0, BigDecimal.valueOf(85.0).compareTo(penalites));
     }
 
     @Test
@@ -276,9 +277,9 @@ class PenaliteServiceTest {
         creance.setEcheance(LocalDate.now().minusDays(89));
         
         // When: calculating penalties
-        Double penalites = penaliteService.calculerPenalites(creance);
+        BigDecimal penalites = penaliteService.calculerPenalites(creance);
         
         // Then: should return 0 (not a complete month)
-        assertEquals(0.0, penalites);
+        assertEquals(0, BigDecimal.valueOf(0.0).compareTo(penalites));
     }
 }
