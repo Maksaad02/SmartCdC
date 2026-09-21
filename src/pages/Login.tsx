@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,11 +83,12 @@ const Login: React.FC = () => {
           </Button>
         </form>
 
+        {/* L'auto-inscription a été retirée : /api/register est réservé aux ADMIN.
+            Elle permettait à un anonyme de créer un compte puis de s'attribuer
+            le rôle ADMIN. Les comptes sont désormais créés depuis la gestion
+            des utilisateurs. */}
         <p className="text-center text-gray-500 mt-4">
-          Pas encore de compte?{" "}
-          <Link to="/register" className="text-blue-500 hover:underline font-semibold">
-            S'inscrire
-          </Link>
+          Pas encore de compte ? Contactez votre administrateur.
         </p>
       </div>
 

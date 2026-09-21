@@ -9,6 +9,8 @@ interface JwtResponse {
 
 interface AuthContextType {
   currentUser: User | null;
+  /** true tant que la session stockée n'a pas fini d'être revalidée. */
+  isLoading: boolean;
   login: (username: string, password: string) => Promise<boolean>;
   register: (name: string, email: string, password: string) => Promise<boolean>;
   logout: () => void;
@@ -23,6 +25,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
+  // Démarre à true : la revalidation du jeton est asynchrone, donc au premier
+  // rendu isAuthenticated valait false et Layout redirigeait vers /login un
+  // utilisateur pourtant connecté, à chaque rafraîchissement de page.
+  const [isLoading, setIsLoading] = useState(true);
 
   // Validate stored token on mount
   React.useEffect(() => {
@@ -69,6 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAuthToken(null);
         }
       }
+      // Quoi qu'il arrive, l'hydratation est terminée : c'est ce signal que
+      // Layout attend avant de décider de rediriger.
+      setIsLoading(false);
     };
 
     validateStoredToken();
@@ -119,8 +128,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       console.log("Login status: ", response.status);
-      console.log("All response headers: ", [...response.headers.entries()]);
-      console.log("Authorization header: ", response.headers.get("Authorization"));
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -133,7 +140,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Get user info from the token - in a real app, you might want to decode the JWT
       // or make a separate API call to get user details
       const data: JwtResponse = await response.json();
-      console.log("JWT reçu (body): ", data.token);
 
       // After getting the token, fetch user details
       const userResponse = await fetch(`${API_URL}/utilisateurs/me`, {
@@ -182,13 +188,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     toast.info("Déconnexion réussie");
   };
 
-  //Log à chaque changement de token
-  React.useEffect(() => {
-    console.log("AuthContext -> authToken changed: ", authToken);
-  }, [authToken]);
 
   const value = {
     currentUser,
+    isLoading,
     login,
     register,
     logout,

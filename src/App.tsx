@@ -4,13 +4,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 
 // Pages
 import Dashboard from "./pages/Dashboard";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
-import Register from "./pages/Register";
 import Debts from "./pages/Debts";
 import DebtForm from "./pages/DebtForm";
 import DebtDetail from "./pages/DebtDetails";
@@ -37,13 +37,13 @@ const App = () => (
         {/* <Toaster /> */}
         <Sonner />
         <BrowserRouter>
+          <ErrorBoundary>
           <Routes>
             {/* Root redirect to login */}
             <Route path="/" element={<Navigate to="/login" replace />} />
             
             {/* Auth routes */}
             <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
             
             {/* Protected routes */}
             <Route element={<Layout />}>
@@ -86,6 +86,7 @@ const App = () => (
             {/* Not found */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </ErrorBoundary>
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

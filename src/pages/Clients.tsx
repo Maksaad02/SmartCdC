@@ -24,11 +24,6 @@ const Clients: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const { authToken } = useAuth();
 
-  // Add token verification
-  if (!authToken) {
-    throw new Error("Authentication token missing");
-  }
-
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
   useEffect(() => {
@@ -55,8 +50,14 @@ const Clients: React.FC = () => {
       }
     };
 
+    if (!authToken) {
+      // Pas encore hydraté : l'effet sera relancé quand le jeton arrivera.
+      setLoading(false);
+      return;
+    }
+
     fetchClients();
-  }, []);
+  }, [authToken]);
 
   const filteredClients = clients.filter(client => {
     const searchLower = searchTerm.toLowerCase();
