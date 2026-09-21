@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
+import org.maksaad.recouvchatbot_rag.security.CallerToken;
 import org.springframework.web.client.RestClient;
 
 import java.util.Collections;
@@ -24,10 +25,20 @@ public class RecouvBackendClient {
             @Value("${recouv.backend.base-url}") String baseUrl,
             @Value("${recouv.backend.api-key}") String apiKey) {
 
+        // X-RECOUV-KEY authentifie le SERVICE ; l'en-tete Authorization transporte
+        // l'identite de l'AGENT appelant. Le backend exige desormais les deux, si
+        // bien que le chatbot ne voit que le portefeuille de cet agent au lieu de
+        // l'integralite de la base.
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
                 .defaultHeader("X-RECOUV-KEY", apiKey)
                 .defaultHeader("Content-Type", "application/json")
+                .requestInitializer(request -> {
+                    String token = CallerToken.get();
+                    if (token != null) {
+                        request.getHeaders().setBearerAuth(token);
+                    }
+                })
                 .build();
     }
 
@@ -100,24 +111,4 @@ public class RecouvBackendClient {
         }
     }
 
-    /**
-     * Get all unpaid debts (all clients)
-     * 
-     * @return List of all unpaid debts
-     */
-    public List<CreanceDTO> getAllUnpaidCreances() {
-        try {
-            return restClient.get()
-                    .uri("/api/external/chatbot/creances/impayees")
-                    .retrieve()
-                    .onStatus(HttpStatusCode::is4xxClientError, (request, response) -> {
-                        System.err.println("Failed to fetch unpaid creances");
-                    })
-                    .body(new ParameterizedTypeReference<List<CreanceDTO>>() {
-                    });
-        } catch (Exception e) {
-            System.err.println("Error fetching unpaid creances: " + e.getMessage());
-            return Collections.emptyList();
-        }
-    }
 }

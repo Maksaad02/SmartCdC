@@ -10,6 +10,16 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
+ * Outils exposes au modele.
+ *
+ * Le cloisonnement n'est PAS assure ici : le backend filtre chaque reponse sur
+ * le portefeuille de l'agent dont le jeton est retransmis. Une consigne de
+ * prompt ne peut pas tenir lieu de controle d'acces, un utilisateur pouvant
+ * toujours demander au modele de faire autrement.
+ *
+ * getAllUnpaidDebtsStats() a ete retire : cet agregat portait sur l'ensemble
+ * des clients et n'avait aucun usage legitime pour un appelant donne.
+ *
  * Backend API Tool for AI Chatbot
  * Provides functions for the AI to query client and debt data via REST API
  * Replaces the deprecated SqlTool that accessed MySQL directly
@@ -126,47 +136,4 @@ public class BackendApiTool {
         }
     }
 
-    /**
-     * Get statistics about all unpaid debts in the system
-     * Use this for general queries about overdue payments
-     * 
-     * @return Summary of unpaid debts across all clients
-     */
-    @Tool(description = "Get statistics about all unpaid debts in the system. " +
-            "Use this when the user asks about overall debt status or overdue payments.")
-    public String getAllUnpaidDebtsStats() {
-
-        try {
-            List<CreanceDTO> unpaidCreances = backendClient.getAllUnpaidCreances();
-
-            if (unpaidCreances == null || unpaidCreances.isEmpty()) {
-                return "There are currently no unpaid debts in the system.";
-            }
-
-            int totalCount = unpaidCreances.size();
-            double totalAmount = 0.0;
-            int lateCount = 0;
-            int penalizedCount = 0;
-
-            for (CreanceDTO creance : unpaidCreances) {
-                totalAmount += creance.getSolde();
-                if (creance.getJoursRetard() > 0) {
-                    lateCount++;
-                }
-                if ("PENALISEE".equals(creance.getStatut())) {
-                    penalizedCount++;
-                }
-            }
-
-            return String.format("📊 Unpaid Debts Statistics:\n" +
-                    "- Total unpaid invoices: %d\n" +
-                    "- Total amount due: %.2f DH\n" +
-                    "- Late invoices (past due): %d\n" +
-                    "- Penalized invoices (>60 days): %d",
-                    totalCount, totalAmount, lateCount, penalizedCount);
-
-        } catch (Exception e) {
-            return "The backend service is temporarily unavailable. Please try again later.";
-        }
-    }
 }
