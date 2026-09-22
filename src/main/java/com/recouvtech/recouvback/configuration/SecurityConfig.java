@@ -6,6 +6,7 @@ import com.recouvtech.recouvback.service.CustomUserDetailsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import jakarta.servlet.DispatcherType;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
@@ -40,6 +41,14 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
+                        // Laisser passer la redirection interne vers /error.
+                        // Sans cela, un refus @PreAuthorize (403) declenche un dispatch
+                        // ERROR vers /error, rejoue anonymement : aucune regle ne
+                        // correspondant, l'entry point ecrasait le 403 par un 401. Le
+                        // front interprete 401 comme une session expiree et deconnectait
+                        // l'agent au lieu d'afficher un refus.
+                        .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD).permitAll()
+
                         // API chatbot : double controle. ApiKeyAuthFilter verifie la cle de
                         // service, et .authenticated() impose en plus un JWT utilisateur valide,
                         // pour que le chatbot herite exactement des droits de l'agent appelant
@@ -57,7 +66,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         // Toutes les autres requêtes doivent être authentifiées
-                        .requestMatchers("/api/**").authenticated())
+                        .requestMatchers("/api/**").authenticated()
+
+                        // Deny-by-default sur tout le reste.
+                        .anyRequest().authenticated())
                 // Renvoyer 401 si non authentifié (au lieu d'un 403 générique)
                 .exceptionHandling(e -> e.authenticationEntryPoint((req, res, ex) -> res.sendError(401)))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
