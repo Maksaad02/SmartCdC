@@ -5,6 +5,7 @@ import com.recouvtech.recouvback.dao.RoleRepository;
 import com.recouvtech.recouvback.dao.UtilisateurRepository;
 import com.recouvtech.recouvback.dto.UtilisateurDTO.RegisterRequestDTO;
 import com.recouvtech.recouvback.entity.Role;
+import com.recouvtech.recouvback.security.CurrentUser;
 import com.recouvtech.recouvback.entity.Utilisateur;
 import com.recouvtech.recouvback.entity.enums.RoleAgent;
 import jakarta.validation.Valid;
@@ -29,6 +30,7 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authManager;
     private final JwtUtils jwtUtils;
+    private final CurrentUser currentUser;
 
     /**
      * Creation de compte, reservee aux ADMIN.
@@ -47,11 +49,17 @@ public class AuthController {
         Role role = roleRepo.findByNom(RoleAgent.AGENT)
                 .orElseThrow(() -> new IllegalStateException("Rôle AGENT introuvable"));
 
+        // Le compte cree appartient a l'organisation de l'administrateur
+        // appelant, jamais a une organisation designee dans la requete.
+        Utilisateur createur = utilisateurRepo.findByEmail(currentUser.email())
+                .orElseThrow(() -> new IllegalStateException("Utilisateur courant introuvable"));
+
         Utilisateur u = new Utilisateur();
         u.setNom(dto.getNom());
         u.setEmail(dto.getEmail());
         u.setMotDePasse(passwordEncoder.encode(dto.getMotDePasse()));
         u.setRole(role);
+        u.setOrganisation(createur.getOrganisation());
 
         utilisateurRepo.save(u);
         return ResponseEntity.status(HttpStatus.CREATED).body("Utilisateur créé");

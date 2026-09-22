@@ -10,6 +10,7 @@ import com.recouvtech.recouvback.entity.Creance;
 import com.recouvtech.recouvback.entity.Utilisateur;
 import com.recouvtech.recouvback.mapper.CreanceMapper;
 import com.recouvtech.recouvback.security.CurrentUser;
+import com.recouvtech.recouvback.exception.RessourceIntrouvableException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -42,14 +43,14 @@ public class CreanceService {
             throw new IllegalArgumentException("L'échéance est obligatoire");
         }
         if (creanceRepository.existsByNumFacture(dto.getNumFacture())) {
-            throw new RuntimeException("Une créance avec ce numéro de facture existe déjà : " + dto.getNumFacture());
+            throw new IllegalArgumentException("Une créance avec ce numéro de facture existe déjà : " + dto.getNumFacture());
         }
 
         Utilisateur agent = resolveOwner(dto.getAgentName());
 
         Client client = clientRepository.findByRaisonSociale(dto.getClientName());
         if (client == null) {
-            throw new RuntimeException("Client not found with name: " + dto.getClientName());
+            throw new RessourceIntrouvableException("Client not found with name: " + dto.getClientName());
         }
 
         Creance creance = CreanceMapper.fromRequestDto(dto, agent, client);
@@ -84,7 +85,7 @@ public class CreanceService {
     public CreanceResponseDTO getByNumFacture(String numFacture) {
         Creance creance = creanceRepository.findByNumFacture(numFacture);
         if (creance == null) {
-            throw new RuntimeException("Créance non trouvée pour la facture : " + numFacture);
+            throw new RessourceIntrouvableException("Créance non trouvée pour la facture : " + numFacture);
         }
         assertCanAccess(creance);
         return CreanceMapper.toDto(withPenalitesCalculees(creance));
@@ -94,14 +95,14 @@ public class CreanceService {
     public CreanceResponseDTO updateCreance(String numFacture, CreanceRequestDTO dto) {
         Creance creance = creanceRepository.findByNumFacture(numFacture);
         if (creance == null) {
-            throw new RuntimeException("Créance non trouvée pour : " + numFacture);
+            throw new RessourceIntrouvableException("Créance non trouvée pour : " + numFacture);
         }
         assertCanAccess(creance);
 
         Utilisateur agent = dto.getAgentName() != null ? resolveOwner(dto.getAgentName()) : creance.getAgentRecouv();
         Client client = clientRepository.findByRaisonSociale(dto.getClientName());
         if (client == null) {
-            throw new RuntimeException("Client not found with name: " + dto.getClientName());
+            throw new RessourceIntrouvableException("Client not found with name: " + dto.getClientName());
         }
 
         CreanceMapper.updateFromRequestDto(creance, dto, agent, client);
@@ -119,7 +120,7 @@ public class CreanceService {
     public void deleteCreance(String numFacture) {
         Creance creance = creanceRepository.findByNumFacture(numFacture);
         if (creance == null) {
-            throw new RuntimeException("Créance non trouvée pour : " + numFacture);
+            throw new RessourceIntrouvableException("Créance non trouvée pour : " + numFacture);
         }
         assertCanAccess(creance);
         creance.setSupprimee(true);
@@ -175,9 +176,12 @@ public class CreanceService {
 
     private Utilisateur resolveOwner(String requestedAgentName) {
         if (currentUser.isAdmin() && requestedAgentName != null && !requestedAgentName.isBlank()) {
-            Utilisateur agent = utilisateurRepository.findByNom(requestedAgentName);
+            // Resolution limitee a l'organisation de l'appelant : sinon un admin
+            // pouvait designer par son nom un agent d'une autre organisation.
+            Utilisateur agent = utilisateurRepository.findByNomAndOrganisation_Id(
+                    requestedAgentName, currentUser.organisationId());
             if (agent == null) {
-                throw new RuntimeException("Agent not found with name: " + requestedAgentName);
+                throw new RessourceIntrouvableException("Agent not found with name: " + requestedAgentName);
             }
             return agent;
         }

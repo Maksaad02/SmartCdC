@@ -10,6 +10,7 @@ import com.recouvtech.recouvback.mapper.ClientMapper;
 import com.recouvtech.recouvback.security.CurrentUser;
 import org.springframework.security.access.AccessDeniedException;
 
+import com.recouvtech.recouvback.exception.RessourceIntrouvableException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -45,14 +46,14 @@ public class ClientService {
 
     public ClientResponseDTO getClientById(Long id) {
         Client client = clientRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Client introuvable"));
+                .orElseThrow(() -> new RessourceIntrouvableException("Client introuvable"));
         assertCanAccess(client);
         return ClientMapper.toDto(client);
     }
 
     public ClientResponseDTO updateClient(Long id, ClientRequestDTO dto) {
         Client client = clientRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Client introuvable"));
+                .orElseThrow(() -> new RessourceIntrouvableException("Client introuvable"));
         assertCanAccess(client);
         Utilisateur agent = null;
         if (dto.getAgentName() != null) {
@@ -64,7 +65,7 @@ public class ClientService {
 
     public void deleteClient(Long id) {
         Client client = clientRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Client introuvable"));
+                .orElseThrow(() -> new RessourceIntrouvableException("Client introuvable"));
         assertCanAccess(client);
         clientRepository.delete(client);
     }
@@ -82,9 +83,12 @@ public class ClientService {
      */
     private Utilisateur resolveOwner(String requestedAgentName) {
         if (currentUser.isAdmin() && requestedAgentName != null && !requestedAgentName.isBlank()) {
-            Utilisateur agent = utilisateurRepository.findByNom(requestedAgentName);
+            // Resolution limitee a l'organisation de l'appelant : sinon un admin
+            // pouvait designer par son nom un agent d'une autre organisation.
+            Utilisateur agent = utilisateurRepository.findByNomAndOrganisation_Id(
+                    requestedAgentName, currentUser.organisationId());
             if (agent == null) {
-                throw new RuntimeException("Aucun agent trouvé avec ce nom : " + requestedAgentName);
+                throw new IllegalArgumentException("Aucun agent trouvé avec ce nom : " + requestedAgentName);
             }
             return agent;
         }

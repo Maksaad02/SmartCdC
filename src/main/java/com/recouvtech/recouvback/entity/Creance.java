@@ -2,6 +2,7 @@ package com.recouvtech.recouvback.entity;
 
 import com.recouvtech.recouvback.entity.enums.StatutCreance;
 import jakarta.persistence.*;
+import org.hibernate.annotations.TenantId;
 import lombok.*;
 import org.hibernate.annotations.SQLRestriction;
 
@@ -32,7 +33,7 @@ public class Creance {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "num_facture", nullable = false, unique = true)
+    @Column(name = "num_facture", nullable = false) // unique par organisation, cf. migration V2
     private String numFacture;
 
     @Column(name = "date_emission")
@@ -61,6 +62,14 @@ public class Creance {
     @Column(name = "supprimee", nullable = false)
     private boolean supprimee = false;
 
+
+    /**
+     * Organisation proprietaire. Renseignee et filtree automatiquement par
+     * Hibernate via @TenantId : ni les services ni les requetes n'ont a y penser.
+     */
+    @TenantId
+    @Column(name = "organisation_id", nullable = false)
+    private Long organisationId;
     @ManyToOne
     @JoinColumn(name = "agent_recouv")
     private Utilisateur agentRecouv;

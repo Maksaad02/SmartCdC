@@ -3,6 +3,7 @@ package com.recouvtech.recouvback.entity;
 import com.recouvtech.recouvback.entity.enums.StatutRelance;
 import com.recouvtech.recouvback.entity.enums.TypeRelance;
 import jakarta.persistence.*;
+import org.hibernate.annotations.TenantId;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -20,6 +21,14 @@ public class Relance {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+
+    /**
+     * Organisation proprietaire. Renseignee et filtree automatiquement par
+     * Hibernate via @TenantId : ni les services ni les requetes n'ont a y penser.
+     */
+    @TenantId
+    @Column(name = "organisation_id", nullable = false)
+    private Long organisationId;
     @ManyToOne
     @JoinColumn(name = "creance_id", referencedColumnName = "id", nullable = false)
     public Creance creance;

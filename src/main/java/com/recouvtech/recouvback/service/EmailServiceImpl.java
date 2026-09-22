@@ -40,7 +40,7 @@ public class EmailServiceImpl implements EmailService {
             // Get client email - throw exception if not available
             String clientEmail = getClientEmail(relance);
             if (clientEmail == null || clientEmail.trim().isEmpty()) {
-                throw new RuntimeException("Email du client non disponible pour la facture: " +
+                throw new IllegalStateException("Email du client non disponible pour la facture: " +
                         relance.getCreance().getNumFacture());
             }
 /**  RECENTLY ADDED*/

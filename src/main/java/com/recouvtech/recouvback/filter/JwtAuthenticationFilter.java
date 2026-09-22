@@ -1,6 +1,8 @@
 package com.recouvtech.recouvback.filter;
 
 import com.recouvtech.recouvback.configuration.JwtUtils;
+import com.recouvtech.recouvback.entity.Utilisateur;
+import com.recouvtech.recouvback.security.TenantContext;
 import com.recouvtech.recouvback.service.CustomUserDetailsService;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -48,6 +50,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                         userDetails, null, userDetails.getAuthorities());
                         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                         SecurityContextHolder.getContext().setAuthentication(authToken);
+
+                        // Doit etre positionne AVANT la suite de la chaine : Hibernate
+                        // lit l'organisation courante a chaque requete cloisonnee.
+                        if (userDetails instanceof Utilisateur u && u.getOrganisation() != null) {
+                            TenantContext.set(u.getOrganisation().getId());
+                        }
                     }
                 }
             } catch (JwtException | UsernameNotFoundException e) {
@@ -60,6 +68,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
 
-        filterChain.doFilter(request, response);
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            // Les threads sont recycles par le conteneur : sans nettoyage, la
+            // requete suivante heriterait de l'organisation de la precedente.
+            TenantContext.clear();
+        }
     }
 }

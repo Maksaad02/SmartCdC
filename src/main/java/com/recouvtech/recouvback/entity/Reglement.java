@@ -3,6 +3,7 @@ package com.recouvtech.recouvback.entity;
 import com.recouvtech.recouvback.entity.enums.ModePaiement;
 import com.recouvtech.recouvback.entity.enums.StatutReglement;
 import jakarta.persistence.*;
+import org.hibernate.annotations.TenantId;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -36,6 +37,14 @@ public class Reglement {
     @Column(name = "reference")
     private String reference;
 
+
+    /**
+     * Organisation proprietaire. Renseignee et filtree automatiquement par
+     * Hibernate via @TenantId : ni les services ni les requetes n'ont a y penser.
+     */
+    @TenantId
+    @Column(name = "organisation_id", nullable = false)
+    private Long organisationId;
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "creance_id")
     private Creance creance;

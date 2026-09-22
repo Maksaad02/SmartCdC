@@ -12,6 +12,7 @@ import com.recouvtech.recouvback.entity.enums.StatutReglement;
 import com.recouvtech.recouvback.mapper.ReglementMapper;
 import com.recouvtech.recouvback.security.CurrentUser;
 import org.springframework.security.access.AccessDeniedException;
+import com.recouvtech.recouvback.exception.RessourceIntrouvableException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,12 +34,12 @@ public class ReglementService {
     public ReglementResponseDTO create(ReglementRequestDTO dto) {
         Creance creance = creanceRepository.findByNumFacture(dto.getNumFacture());
         if (creance == null) {
-            throw new RuntimeException("Créance not found with numFacture: " + dto.getNumFacture());
+            throw new RessourceIntrouvableException("Créance not found with numFacture: " + dto.getNumFacture());
         }
 
-        Utilisateur agent = utilisateurRepository.findByNom(dto.getAgentName());
+        Utilisateur agent = utilisateurRepository.findByNomAndOrganisation_Id(dto.getAgentName(), currentUser.organisationId());
         if (agent == null) {
-            throw new RuntimeException("Agent not found with name: " + dto.getAgentName());
+            throw new RessourceIntrouvableException("Agent not found with name: " + dto.getAgentName());
         }
 
         Reglement r = ReglementMapper.fromRequestDto(dto, creance, agent);
@@ -77,7 +78,7 @@ public class ReglementService {
 
     public ReglementResponseDTO getById(Long id) {
         Reglement r = reglementRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Reglement not found with id: " + id));
+                .orElseThrow(() -> new RessourceIntrouvableException("Reglement not found with id: " + id));
         assertCanAccess(r);
         return ReglementMapper.toDto(r);
     }
@@ -85,7 +86,7 @@ public class ReglementService {
     @Transactional
     public ReglementResponseDTO update(Long id, ReglementRequestDTO dto) {
         Reglement r = reglementRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Reglement not found with id: " + id));
+                .orElseThrow(() -> new RessourceIntrouvableException("Reglement not found with id: " + id));
         assertCanAccess(r);
 
         boolean wasEffectue = r.getStatut() == StatutReglement.EFFECTUE;
@@ -94,12 +95,12 @@ public class ReglementService {
 
         Creance creance = creanceRepository.findByNumFacture(dto.getNumFacture());
         if (creance == null) {
-            throw new RuntimeException("Créance not found with numFacture: " + dto.getNumFacture());
+            throw new RessourceIntrouvableException("Créance not found with numFacture: " + dto.getNumFacture());
         }
         
-        Utilisateur agent = utilisateurRepository.findByNom(dto.getAgentName());
+        Utilisateur agent = utilisateurRepository.findByNomAndOrganisation_Id(dto.getAgentName(), currentUser.organisationId());
         if (agent == null) {
-            throw new RuntimeException("Agent not found with name: " + dto.getAgentName());
+            throw new RessourceIntrouvableException("Agent not found with name: " + dto.getAgentName());
         }
 
         // Creance d'origine capturee AVANT le remapping : si le reglement change
@@ -128,7 +129,7 @@ public class ReglementService {
     @Transactional
     public void delete(Long id) {
         Reglement reglement = reglementRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Reglement not found with id: " + id));
+                .orElseThrow(() -> new RessourceIntrouvableException("Reglement not found with id: " + id));
         assertCanAccess(reglement);
         Creance creance = reglement.getCreance();
         
@@ -143,7 +144,7 @@ public class ReglementService {
     @Transactional
     public ReglementResponseDTO updateStatus(Long id, StatutReglement newStatus) {
         Reglement reglement = reglementRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Reglement not found with id: " + id));
+                .orElseThrow(() -> new RessourceIntrouvableException("Reglement not found with id: " + id));
         assertCanAccess(reglement);
 
         // Le statut precedent doit etre lu AVANT la mutation : le test d'origine

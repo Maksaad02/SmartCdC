@@ -15,16 +15,14 @@ public class RoleInitializer {
 
     @PostConstruct
     public void initRoles() {
-        if (roleRepository.count() == 0) {
-
-            Role admin = new Role();
-            admin.setNom(RoleAgent.ADMIN);
-
-            Role agent = new Role();
-            agent.setNom(RoleAgent.AGENT);
-
-            roleRepository.save(admin);
-            roleRepository.save(agent);
+        // Idempotent par role : l'ajout de SUPER_ADMIN doit aussi s'appliquer a
+        // une base existante, ou count() != 0.
+        for (RoleAgent nom : RoleAgent.values()) {
+            if (roleRepository.findByNom(nom).isEmpty()) {
+                Role role = new Role();
+                role.setNom(nom);
+                roleRepository.save(role);
+            }
         }
     }
 }

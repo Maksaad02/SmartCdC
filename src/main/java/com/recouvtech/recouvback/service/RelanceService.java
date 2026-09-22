@@ -12,6 +12,7 @@ import com.recouvtech.recouvback.dao.UtilisateurRepository;
 import com.recouvtech.recouvback.mapper.RelanceMapper;
 import com.recouvtech.recouvback.security.CurrentUser;
 import org.springframework.security.access.AccessDeniedException;
+import com.recouvtech.recouvback.exception.RessourceIntrouvableException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,9 +39,9 @@ public class RelanceService {
 
     public RelanceResponseDTO create(RelanceRequestDTO dto) {
         Creance creance = creanceRepository.findByNumFacture(dto.getNumFacture());
-        Utilisateur agent = utilisateurRepository.findByNom(dto.getAgentName());
+        Utilisateur agent = utilisateurRepository.findByNomAndOrganisation_Id(dto.getAgentName(), currentUser.organisationId());
         if (agent == null) {
-            throw new RuntimeException("Aucun utilisateur trouvé avec le nom : " + dto.getAgentName());
+            throw new IllegalArgumentException("Aucun utilisateur trouvé avec le nom : " + dto.getAgentName());
         }
         Relance r = RelanceMapper.fromRequestDto(dto, creance, agent);
         return RelanceMapper.toDto(relanceRepository.save(r));
@@ -56,7 +57,7 @@ public class RelanceService {
 
     public RelanceResponseDTO getById(Long id) {
         Relance r = relanceRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Not found"));
+                .orElseThrow(() -> new RessourceIntrouvableException("Not found"));
         assertCanAccess(r);
         return RelanceMapper.toDto(r);
     }
@@ -77,14 +78,14 @@ public class RelanceService {
         Relance r = relanceRepository.findById(id).orElseThrow();
         assertCanAccess(r);
         Creance creance = creanceRepository.findByNumFacture(dto.getNumFacture());
-        Utilisateur agent = utilisateurRepository.findByNom(dto.getAgentName());
+        Utilisateur agent = utilisateurRepository.findByNomAndOrganisation_Id(dto.getAgentName(), currentUser.organisationId());
         RelanceMapper.updateFromRequestDto(r, dto, creance, agent);
         return RelanceMapper.toDto(relanceRepository.save(r));
     }
 
     public void delete(Long id) {
         Relance r = relanceRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Not found"));
+                .orElseThrow(() -> new RessourceIntrouvableException("Not found"));
         assertCanAccess(r);
         relanceRepository.delete(r);
     }
@@ -94,11 +95,11 @@ public class RelanceService {
      */
     public boolean envoyerRelanceManuellement(Long relanceId, String agentName) {
         Relance relance = relanceRepository.findById(relanceId)
-            .orElseThrow(() -> new RuntimeException("Relance non trouvée"));
+            .orElseThrow(() -> new RessourceIntrouvableException("Relance non trouvée"));
         
         // Vérifier que la relance est en attente
         if (relance.getStatutRelance() != StatutRelance.EN_ATTENTE) {
-            throw new RuntimeException("Cette relance ne peut pas être envoyée manuellement");
+            throw new IllegalArgumentException("Cette relance ne peut pas être envoyée manuellement");
         }
         
         // Vérifier que la créance n'est pas payée
@@ -106,7 +107,7 @@ public class RelanceService {
             relance.setStatutRelance(StatutRelance.ANNULEE);
             relance.setCommentaire("Créance déjà payée - relance annulée");
             relanceRepository.save(relance);
-            throw new RuntimeException("Impossible d'envoyer la relance : créance déjà payée");
+            throw new IllegalArgumentException("Impossible d'envoyer la relance : créance déjà payée");
         }
         
         try {
