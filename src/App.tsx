@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import ErrorBoundary from "./components/ErrorBoundary";
+import RequireAdmin from "./components/RequireAdmin";
 
 
 // Pages
@@ -80,7 +81,14 @@ const App = () => (
               <Route path="/profile" element={<Profile />} />
 
               {/* User Management */}
-              <Route path="/utilisateurs" element={<UserManagement />} />
+              <Route
+                path="/utilisateurs"
+                element={
+                  <RequireAdmin>
+                    <UserManagement />
+                  </RequireAdmin>
+                }
+              />
             </Route>
             
             {/* Not found */}
