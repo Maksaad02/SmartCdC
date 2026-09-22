@@ -1,0 +1,540 @@
+# Coffee Marketplace Platform - Software Engineering Project
+
+## Project Title
+**CoffeeConnect: Multi-Vendor E-Commerce Platform for Coffee Products and Services**
+
+## Context and Problem Statement
+
+### Context
+The coffee industry faces challenges in connecting specialty coffee vendors, roasters, and equipment suppliers directly with consumers and businesses. Traditional e-commerce platforms lack specialized features for the coffee trade, such as subscription management, quality ratings specific to coffee characteristics, and business-to-business procurement capabilities.
+
+### Problem Statement
+There is a need for a comprehensive digital platform that:
+- Enables coffee vendors to manage and sell their products/services online
+- Provides consumers with access to specialty coffee products from multiple vendors
+- Facilitates enterprise procurement for businesses requiring bulk orders
+- Supports subscription-based models for regular coffee deliveries
+- Ensures quality control through specialized review and rating systems
+
+## Objectives
+
+### General Objective
+Develop a secure, scalable, and user-friendly multi-vendor e-commerce platform specialized for the coffee industry, supporting B2C and B2B transactions.
+
+### Specific Objectives
+1. Design and implement a role-based access system (Admin, Vendor, Enterprise Client, Individual Client)
+2. Create a vendor management system with product/service catalog and analytics
+3. Implement a shopping cart and order management system
+4. Develop a subscription management module for recurring orders
+5. Build an administrative dashboard for platform management
+6. Integrate a review and rating system specific to coffee products
+7. Implement real-time analytics for vendors and administrators
+8. Ensure responsive design for mobile and desktop access
+
+## Functional Requirements
+
+### FR1: User Authentication and Authorization
+- **FR1.1**: Users must register with email, password, and role selection
+- **FR1.2**: System must support four user roles: Admin, Vendor, Enterprise Client, Individual Client
+- **FR1.3**: Users must be able to log in and log out securely
+- **FR1.4**: Password recovery mechanism must be available
+
+### FR2: Product Management (Vendor)
+- **FR2.1**: Vendors must add products with name, description, price, category, and images
+- **FR2.2**: Vendors must edit and delete their products
+- **FR2.3**: Products must be categorized (Coffee Beans, Equipment, Accessories, etc.)
+- **FR2.4**: Vendors must manage inventory levels and stock status
+- **FR2.5**: Products can be marked as featured or on promotion
+
+### FR3: Category Management (Admin)
+- **FR3.1**: Admins must create, edit, and delete product categories
+- **FR3.2**: Categories must support hierarchical organization (parent/subcategories)
+- **FR3.3**: Each category must have a name, description, and icon/image
+
+### FR4: Shopping and Cart Management
+- **FR4.1**: Clients must browse products by category, vendor, or search
+- **FR4.2**: Clients must add products to cart with quantity selection
+- **FR4.3**: Clients must view and modify cart contents before checkout
+- **FR4.4**: System must calculate total price including taxes
+
+### FR5: Order Management
+- **FR5.1**: Clients must complete orders with shipping information
+- **FR5.2**: System must generate unique order numbers
+- **FR5.3**: Vendors must view and manage orders for their products
+- **FR5.4**: Order status must be tracked (Pending, Processing, Shipped, Delivered, Cancelled)
+- **FR5.5**: Clients must view their order history
+
+### FR6: Subscription Management
+- **FR6.1**: Clients must subscribe to recurring coffee deliveries
+- **FR6.2**: Subscription plans must support different frequencies (weekly, monthly)
+- **FR6.3**: Clients must manage (pause, cancel, modify) their subscriptions
+- **FR6.4**: System must automatically process subscription renewals
+
+### FR7: Review and Rating System
+- **FR7.1**: Clients must rate products (1-5 stars)
+- **FR7.2**: Clients must write detailed reviews with text feedback
+- **FR7.3**: Reviews must include criteria specific to coffee (aroma, taste, body, acidity)
+- **FR7.4**: System must calculate average ratings for products
+
+### FR8: Vendor Dashboard and Analytics
+- **FR8.1**: Vendors must view sales analytics (revenue, orders, trends)
+- **FR8.2**: Dashboard must display key metrics (monthly revenue, total orders)
+- **FR8.3**: Vendors must access detailed sales reports with date filters
+- **FR8.4**: System must provide product performance analytics
+
+### FR9: Admin Dashboard
+- **FR9.1**: Admins must view platform-wide statistics
+- **FR9.2**: Admins must manage user accounts (approve vendors, manage clients)
+- **FR9.3**: Admins must moderate product listings and reviews
+- **FR9.4**: System must generate platform revenue and transaction reports
+
+### FR10: Search and Filter
+- **FR10.1**: Users must search products by name, description, or category
+- **FR10.2**: Users must filter products by price range, rating, vendor, category
+- **FR10.3**: Search results must be sorted by relevance, price, rating, or date
+
+## Non-Functional Requirements
+
+### NFR1: Performance
+- **NFR1.1**: Page load time must not exceed 3 seconds
+- **NFR1.2**: System must support at least 1000 concurrent users
+- **NFR1.3**: Database queries must execute in less than 500ms
+- **NFR1.4**: Product images must be optimized and lazy-loaded
+
+### NFR2: Security
+- **NFR2.1**: All passwords must be hashed using industry-standard algorithms
+- **NFR2.2**: Authentication tokens must expire after 24 hours of inactivity
+- **NFR2.3**: All API endpoints must validate user permissions
+- **NFR2.4**: Sensitive data must be encrypted in transit (HTTPS) and at rest
+- **NFR2.5**: SQL injection and XSS attacks must be prevented
+
+### NFR3: Usability
+- **NFR3.1**: Interface must be intuitive with minimal learning curve
+- **NFR3.2**: System must provide clear error messages and validation feedback
+- **NFR3.3**: Interface must be accessible (WCAG 2.1 Level AA compliance)
+- **NFR3.4**: User actions must have visual feedback (loading states, confirmations)
+
+### NFR4: Scalability
+- **NFR4.1**: Architecture must support horizontal scaling
+- **NFR4.2**: Database must handle growing product catalog (100,000+ products)
+- **NFR4.3**: System must support adding new vendor accounts without performance degradation
+
+### NFR5: Maintainability
+- **NFR5.1**: Code must follow TypeScript and React best practices
+- **NFR5.2**: Components must be modular and reusable
+- **NFR5.3**: System must have comprehensive documentation
+- **NFR5.4**: Code must have minimum 70% test coverage
+
+### NFR6: Compatibility
+- **NFR6.1**: System must work on modern browsers (Chrome, Firefox, Safari, Edge)
+- **NFR6.2**: Interface must be responsive (mobile, tablet, desktop)
+- **NFR6.3**: System must support screen sizes from 320px to 4K displays
+
+### NFR7: Availability
+- **NFR7.1**: System uptime must be 99.5% or higher
+- **NFR7.2**: Planned maintenance windows must not exceed 4 hours
+- **NFR7.3**: System must have automated backup every 24 hours
+
+## Actors and Use Cases
+
+### Actors
+
+#### 1. Individual Client (Consumer)
+- **Description**: End user purchasing coffee products for personal consumption
+- **Responsibilities**: Browse products, make purchases, manage orders, leave reviews, manage subscriptions
+
+#### 2. Enterprise Client (Business)
+- **Description**: Business entity making bulk purchases for organizational needs
+- **Responsibilities**: Browse products, place bulk orders, manage enterprise account, view invoices, manage contracts
+
+#### 3. Vendor
+- **Description**: Coffee producer, roaster, or equipment supplier selling on the platform
+- **Responsibilities**: Manage product catalog, process orders, view analytics, manage inventory, respond to reviews
+
+#### 4. Administrator
+- **Description**: Platform manager with full system access
+- **Responsibilities**: Manage users, categories, moderate content, view platform analytics, configure system settings
+
+### Use Cases
+
+#### UC1: User Registration
+- **Actor**: Individual Client, Enterprise Client, Vendor
+- **Description**: New user creates an account on the platform
+- **Preconditions**: User has valid email address
+- **Main Flow**:
+  1. User navigates to registration page
+  2. User provides email, password, and selects role
+  3. User provides additional information based on role
+  4. System validates input
+  5. System creates account and sends confirmation email
+  6. User confirms email and account is activated
+- **Postconditions**: User account is created and active
+
+#### UC2: Add Product (Vendor)
+- **Actor**: Vendor
+- **Description**: Vendor adds a new product to their catalog
+- **Preconditions**: Vendor is authenticated and has an active account
+- **Main Flow**:
+  1. Vendor navigates to product management
+  2. Vendor clicks "Add Product"
+  3. Vendor enters product details (name, description, price, category)
+  4. Vendor uploads product images
+  5. Vendor sets inventory level
+  6. System validates input
+  7. System saves product to database
+  8. System displays confirmation message
+- **Postconditions**: New product is added to vendor's catalog
+
+#### UC3: Search and Browse Products
+- **Actor**: Individual Client, Enterprise Client
+- **Description**: User searches for and browses available products
+- **Preconditions**: None (public access)
+- **Main Flow**:
+  1. User enters search query or selects category
+  2. System retrieves matching products
+  3. User applies filters (price, rating, vendor)
+  4. System updates results based on filters
+  5. User views product details
+- **Postconditions**: User has viewed relevant products
+
+#### UC4: Place Order
+- **Actor**: Individual Client, Enterprise Client
+- **Description**: User completes a purchase
+- **Preconditions**: User is authenticated, cart has items
+- **Main Flow**:
+  1. User reviews cart contents
+  2. User proceeds to checkout
+  3. User provides shipping information
+  4. User selects payment method
+  5. User confirms order
+  6. System processes payment
+  7. System creates order record
+  8. System sends confirmation to user and vendor
+  9. System decrements inventory
+- **Postconditions**: Order is created and vendors are notified
+
+#### UC5: Manage Subscription
+- **Actor**: Individual Client
+- **Description**: User creates or modifies a coffee subscription
+- **Preconditions**: User is authenticated
+- **Main Flow**:
+  1. User navigates to subscription management
+  2. User selects subscription plan
+  3. User chooses frequency and products
+  4. User provides payment and shipping information
+  5. System creates subscription
+  6. System schedules recurring orders
+- **Alternate Flow**: User pauses or cancels existing subscription
+- **Postconditions**: Subscription is active or modified
+
+#### UC6: Manage Categories (Admin)
+- **Actor**: Administrator
+- **Description**: Admin creates, edits, or deletes product categories
+- **Preconditions**: Admin is authenticated
+- **Main Flow**:
+  1. Admin navigates to category management
+  2. Admin clicks "Add Category"
+  3. Admin enters category name, description, and parent category
+  4. Admin uploads category icon
+  5. System validates input
+  6. System saves category
+  7. System updates category hierarchy
+- **Postconditions**: Category structure is updated
+
+#### UC7: View Analytics (Vendor)
+- **Actor**: Vendor
+- **Description**: Vendor views sales and performance analytics
+- **Preconditions**: Vendor is authenticated
+- **Main Flow**:
+  1. Vendor navigates to analytics dashboard
+  2. Vendor selects date range
+  3. System retrieves sales data
+  4. System displays charts and metrics
+  5. Vendor can export reports
+- **Postconditions**: Vendor has reviewed performance data
+
+#### UC8: Write Product Review
+- **Actor**: Individual Client, Enterprise Client
+- **Description**: Customer leaves a review for purchased product
+- **Preconditions**: User has purchased and received the product
+- **Main Flow**:
+  1. User navigates to order history
+  2. User selects product to review
+  3. User provides star rating (1-5)
+  4. User writes review text
+  5. User rates coffee characteristics (aroma, taste, body, acidity)
+  6. System validates input
+  7. System saves review
+  8. System updates product average rating
+- **Postconditions**: Review is published and visible to other users
+
+## Proposed Architecture
+
+### Architecture Pattern
+**Three-Tier Architecture with Component-Based Frontend**
+
+### Tier 1: Presentation Layer (Frontend)
+- **Technology**: React 18 with TypeScript
+- **State Management**: React Query for server state, React hooks for local state
+- **Routing**: React Router v6
+- **UI Framework**: Tailwind CSS with shadcn/ui components
+- **Build Tool**: Vite
+
+**Components Structure**:
+```
+src/
+├── components/
+│   ├── ui/           # Reusable UI components (Button, Card, Dialog, etc.)
+│   ├── layout/       # Layout components (Header, Footer, Sidebar)
+│   ├── profile/      # Profile-related components
+│   ├── marketplace/  # Marketplace components (ProductGrid, Filters)
+│   ├── subscription/ # Subscription management components
+│   ├── analytics/    # Analytics and dashboard components
+│   └── reviews/      # Review and rating components
+├── pages/            # Page components (mapped to routes)
+├── hooks/            # Custom React hooks
+└── lib/              # Utility functions and helpers
+```
+
+### Tier 2: Application Layer (Backend)
+- **Technology**: Supabase (PostgreSQL + Edge Functions)
+- **Authentication**: Supabase Auth with JWT
+- **Storage**: Supabase Storage for product images
+- **API**: RESTful API via Supabase
+
+**Edge Functions** (Serverless):
+- Payment processing
+- Order creation and validation
+- Email notifications
+- Subscription management
+- Analytics aggregation
+
+### Tier 3: Data Layer
+- **Database**: PostgreSQL (via Supabase)
+- **ORM**: Supabase Client Library
+- **Caching**: Browser cache + Service Workers
+
+**Database Schema** (Main Tables):
+- `users` (id, email, role, profile_data)
+- `products` (id, vendor_id, name, description, price, category_id, inventory, images)
+- `categories` (id, name, description, parent_id, icon)
+- `orders` (id, client_id, total, status, shipping_info, created_at)
+- `order_items` (id, order_id, product_id, quantity, price)
+- `subscriptions` (id, client_id, plan_id, status, frequency, next_billing)
+- `reviews` (id, product_id, user_id, rating, comment, coffee_ratings)
+- `vendors` (id, user_id, business_name, description, rating, total_sales)
+
+### Security Architecture
+- **Authentication**: JWT tokens with refresh mechanism
+- **Authorization**: Role-Based Access Control (RBAC)
+- **Data Protection**: Row Level Security (RLS) policies in PostgreSQL
+- **API Security**: Rate limiting, input validation, CORS configuration
+
+### Deployment Architecture
+- **Frontend Hosting**: Lovable/Vercel/Netlify (CDN)
+- **Backend**: Supabase Cloud
+- **CI/CD**: Git-based deployment pipeline
+- **Monitoring**: Application performance monitoring, error tracking
+
+## UML Diagrams (Expected Deliverables)
+
+### 1. Use Case Diagram
+**Purpose**: Illustrate system functionality from user perspective
+- All actors (Admin, Vendor, Enterprise Client, Individual Client)
+- Main use cases for each actor
+- Relationships between use cases (include, extend, generalization)
+
+### 2. Class Diagram
+**Purpose**: Show static structure of the system
+- Main classes: User, Product, Order, Subscription, Review, Category, Vendor
+- Attributes and methods for each class
+- Relationships (association, aggregation, composition, inheritance)
+- Multiplicities
+
+### 3. Sequence Diagrams (Minimum 3)
+**Purpose**: Show interaction between objects over time
+
+**Required Diagrams**:
+- **3.1**: User authentication flow
+- **3.2**: Product purchase process (from cart to order confirmation)
+- **3.3**: Subscription creation and renewal
+- **3.4**: Product review submission
+
+### 4. Activity Diagrams (Minimum 2)
+**Purpose**: Show workflow of business processes
+
+**Required Diagrams**:
+- **4.1**: Order processing workflow (vendor perspective)
+- **4.2**: Product search and filter process
+
+### 5. State Diagram (Minimum 2)
+**Purpose**: Show states and transitions of key objects
+
+**Required Diagrams**:
+- **5.1**: Order lifecycle states
+- **5.2**: Subscription states
+
+### 6. Component Diagram
+**Purpose**: Show system components and dependencies
+- Frontend components (React modules)
+- Backend services (Edge Functions)
+- External systems (Supabase, Payment Gateway)
+- Component interfaces and dependencies
+
+### 7. Deployment Diagram
+**Purpose**: Show physical deployment of system
+- Client devices (Browser)
+- Web server / CDN
+- Application server (Edge Functions)
+- Database server
+- File storage
+- Network connections
+
+### 8. Entity-Relationship Diagram (ERD)
+**Purpose**: Show database structure
+- All entities (tables)
+- Attributes and primary keys
+- Relationships and foreign keys
+- Cardinalities
+
+### 9. Package Diagram
+**Purpose**: Show organization of code into packages
+- Frontend packages (components, pages, hooks, utilities)
+- Backend packages (functions, models, services)
+- Dependencies between packages
+
+## Expected Deliverables
+
+### 1. Documentation (40%)
+
+#### 1.1 Requirements Specification Document
+- Complete functional and non-functional requirements
+- Use case descriptions with scenarios
+- User stories for main features
+- Acceptance criteria
+
+#### 1.2 UML Diagrams Portfolio
+- All 9 types of diagrams listed above
+- High-quality, clear diagrams created with professional tools (PlantUML, Lucidchart, Draw.io, Enterprise Architect)
+- Consistency in notation and style
+- Each diagram accompanied by explanatory text
+
+#### 1.3 Architecture Documentation
+- System architecture description
+- Technology stack justification
+- Design patterns used
+- Security architecture
+- Scalability considerations
+
+#### 1.4 Data Model Documentation
+- Complete ERD
+- Database schema with constraints
+- Data dictionary
+- Migration strategy
+
+### 2. Implementation (40%)
+
+#### 2.1 Frontend Implementation
+- React application with TypeScript
+- Responsive UI using Tailwind CSS
+- All main pages implemented
+- Component library created
+- Client-side routing configured
+
+#### 2.2 Backend Implementation
+- Database schema created
+- Authentication system configured
+- API endpoints for core features
+- Edge functions for business logic
+- Row Level Security policies
+
+#### 2.3 Integration
+- Frontend-backend integration complete
+- Authentication flow working
+- CRUD operations for products, orders, categories
+- File upload for product images
+
+### 3. Testing Documentation (10%)
+
+#### 3.1 Test Plan
+- Test strategy and approach
+- Test cases for main features
+- User acceptance test scenarios
+
+#### 3.2 Test Results
+- Unit test results
+- Integration test results
+- Manual test results
+
+### 4. Project Management (10%)
+
+#### 4.1 Project Plan
+- Work breakdown structure
+- Timeline and milestones
+- Resource allocation
+- Risk management plan
+
+#### 4.2 Development Logs
+- Git commit history
+- Sprint reports (if using Agile)
+- Issue tracking
+
+### 5. Presentation Materials
+- Project presentation slides (15-20 slides)
+- Demo video (5-10 minutes)
+- User manual or quick start guide
+
+## Evaluation Criteria
+
+| Criterion | Weight | Description |
+|-----------|--------|-------------|
+| Requirements Quality | 10% | Completeness, clarity, traceability |
+| UML Diagrams Quality | 20% | Correctness, completeness, consistency |
+| Architecture Design | 15% | Soundness, scalability, security |
+| Implementation Quality | 25% | Code quality, functionality, best practices |
+| Testing | 10% | Coverage, test quality, results |
+| Documentation | 15% | Clarity, completeness, professionalism |
+| Presentation | 5% | Communication, demo quality |
+
+## Timeline Suggestion (14 weeks)
+
+- **Week 1-2**: Requirements gathering and analysis
+- **Week 3-4**: UML diagrams creation (use cases, class, sequence)
+- **Week 5-6**: Architecture design and database modeling
+- **Week 7-8**: Remaining UML diagrams, finalize documentation
+- **Week 9-11**: Implementation (frontend and backend)
+- **Week 12**: Testing and bug fixes
+- **Week 13**: Final documentation and presentation preparation
+- **Week 14**: Final presentation and project delivery
+
+## References and Resources
+
+### Modeling Tools
+- PlantUML (text-based UML)
+- Lucidchart (online diagramming)
+- Draw.io (free, open-source)
+- Visual Paradigm (comprehensive UML tool)
+- Enterprise Architect (professional UML tool)
+
+### Technologies Documentation
+- React: https://react.dev
+- TypeScript: https://www.typescriptlang.org
+- Supabase: https://supabase.com/docs
+- Tailwind CSS: https://tailwindcss.com
+- shadcn/ui: https://ui.shadcn.com
+
+### UML Standards
+- UML 2.5 Specification: https://www.omg.org/spec/UML/
+- UML Best Practices
+
+### Software Engineering References
+- Sommerville, I. (2015). Software Engineering (10th ed.)
+- Larman, C. (2004). Applying UML and Patterns
+- Fowler, M. (2003). UML Distilled
+
+---
+
+**Course Level**: MIAGE / M1-M2 Software Engineering
+**Project Type**: Group project (3-4 students) or Individual
+**Estimated Effort**: 200-250 hours total
+**Keywords**: UML, Software Architecture, E-Commerce, Multi-Vendor Platform, React, TypeScript, Database Design
