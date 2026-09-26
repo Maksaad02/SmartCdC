@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -15,98 +16,67 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
-import { Client, Debt } from "../models/types";
+import { apiFetch, errorMessage } from "@/lib/apiClient";
+import { fetchAllPages } from "@/lib/pagedQueries";
+import { localDateIso } from "@/lib/dates";
+import { clientSchema, creanceSchema } from "@/schemas";
+import { formatCurrency } from "../utils/formatters";
 
 const DebtForm = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const isEditing = !!id;
-  const { authToken, currentUser } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [clients, setClients] = useState<Client[]>([]);
+  const { currentUser } = useAuth();
 
   const [formData, setFormData] = useState({
     numFacture: "",
     clientName: "",
-    dateEmission: "",
+    dateEmission: localDateIso(),
     echeance: "",
     montantFacture: "",
-    montantEncaisse: "0",
-    statut: "IMPAYEE",
-    actions: ""
   });
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
-
-  // Fetch clients
+  // Liste des clients pour la liste deroulante : toutes les pages (2000 clients maximum).
+  const clientsQuery = useQuery({
+    queryKey: ["/clients", "options"],
+    queryFn: ({ signal }) => fetchAllPages("/clients", clientSchema, { maxItems: 2000, signal }),
+  });
+  const clients = clientsQuery.data?.items ?? [];
   useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        const response = await fetch(`${API_URL}/clients`, {
-          headers: {
-            Authorization: `Bearer ${authToken}`
-          }
-        });
-        const data = await response.json();
-        setClients(data);
-      } catch (err) {
-        toast.error("Impossible de charger les clients");
-      }
-    };
-
-    fetchClients();
-  }, [authToken]);
-
-  // Fetch debt if editing
-  useEffect(() => {
-    if (isEditing && id) {
-      const fetchDebt = async () => {
-        setLoading(true);
-        try {
-          const response = await fetch(`${API_URL}/creances/${id}`, {
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${authToken}`
-            }
-          });
-
-          if (!response.ok) {
-            throw new Error(`Error ${response.status}`);
-          }
-
-          const data = await response.json();
-          console.log("Fetched debt data:", data); // Debug log
-
-          setFormData({
-            numFacture: data.numFacture,
-            clientName: data.clientName || "",
-            dateEmission: data.dateEmission ? new Date(data.dateEmission).toISOString().split('T')[0] : "",
-            echeance: data.echeance ? new Date(data.echeance).toISOString().split('T')[0] : "",
-            montantFacture: data.montantFacture?.toString() || "",
-            montantEncaisse: data.montantEncaisse?.toString() || "0",
-            statut: data.statut || "IMPAYEE",
-            actions: ""
-          });
-        } catch (err) {
-          console.error("Error fetching debt:", err);
-          toast.error("Erreur lors du chargement de la créance");
-          navigate("/debts");
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchDebt();
-    } else {
-      // Generate invoice number for new debts
-      const newNum = `F${new Date().getFullYear()}-${String(Math.floor(Math.random() * 999)).padStart(3, "0")}`;
-      setFormData((prev) => ({
-        ...prev,
-        numFacture: newNum,
-        dateEmission: new Date().toISOString().split("T")[0]
-      }));
+    if (clientsQuery.isError) toast.error("Impossible de charger les clients");
+    if (clientsQuery.data?.truncated) {
+      toast.warning("Plus de 2000 clients : la liste est tronquée. Contactez l'administrateur.");
     }
-  }, [id, isEditing, authToken, navigate]);
+  }, [clientsQuery.isError, clientsQuery.data?.truncated]);
+
+  // Creance a modifier
+  const debtQuery = useQuery({
+    queryKey: ["/creances", id],
+    queryFn: ({ signal }) =>
+      apiFetch(`/creances/${encodeURIComponent(id ?? "")}`, { schema: creanceSchema, signal }),
+    enabled: isEditing,
+  });
+  const loading = isEditing && debtQuery.isLoading;
+
+  useEffect(() => {
+    const data = debtQuery.data;
+    if (!data) return;
+    setFormData({
+      numFacture: data.numFacture,
+      clientName: data.clientName || "",
+      dateEmission: "",
+      echeance: data.echeance ?? "",
+      montantFacture: data.montantFacture?.toString() || "",
+    });
+  }, [debtQuery.data]);
+
+  useEffect(() => {
+    if (debtQuery.isError) {
+      toast.error("Erreur lors du chargement de la créance");
+      navigate("/debts");
+    }
+  }, [debtQuery.isError, navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -117,60 +87,46 @@ const DebtForm = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const saveMutation = useMutation({
+    mutationFn: (payload: object) =>
+      apiFetch(isEditing ? `/creances/${encodeURIComponent(id ?? "")}` : "/creances", {
+        method: isEditing ? "PUT" : "POST",
+        body: payload,
+      }),
+    onSuccess: () => {
+      toast.success(isEditing ? "Créance modifiée avec succès" : "Créance créée avec succès");
+      queryClient.invalidateQueries({ queryKey: ["/creances"] });
+      queryClient.invalidateQueries({ queryKey: ["/dashboard/stats"] });
+      navigate("/debts");
+    },
+    onError: (err) =>
+      toast.error(errorMessage(err, isEditing ? "Erreur lors de la modification de la créance" : "Erreur lors de la création de la créance")),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const {
-      numFacture,
-      clientName,
-      dateEmission,
-      echeance,
-      montantFacture,
-      montantEncaisse,
-      statut
-    } = formData;
-
-    if (!clientName || !dateEmission || !echeance || !montantFacture || !statut) {
+    const { numFacture, clientName, dateEmission, echeance, montantFacture } = formData;
+    if (!numFacture.trim() || !clientName || !echeance || !montantFacture) {
       toast.error("Veuillez remplir tous les champs obligatoires");
       return;
     }
-
-    const payload = {
-      numFacture,
-      clientName,
-      agentName: currentUser?.name || "agent",
-      dateEmission,
-      echeance,
-      montantFacture: parseFloat(montantFacture),
-      montantEncaisse: parseFloat(montantEncaisse),
-      statut
-    };
-
-    try {
-      const url = isEditing
-        ? `${API_URL}/creances/${id}`
-        : `${API_URL}/creances`;
-
-      const response = await fetch(url, {
-        method: isEditing ? "PUT" : "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Error ${response.status}`);
-      }
-
-      toast.success(isEditing ? "Créance modifiée avec succès" : "Créance créée avec succès");
-      navigate("/debts");
-    } catch (err) {
-      console.error("Error saving debt:", err);
-      toast.error(err instanceof Error ? err.message : (isEditing ? "Erreur lors de la modification de la créance" : "Erreur lors de la création de la créance"));
+    const montant = parseFloat(montantFacture);
+    if (!Number.isFinite(montant) || montant <= 0) {
+      toast.error("Le montant facturé doit être strictement positif");
+      return;
     }
+
+    // montantEncaisse et statut ne sont plus envoyes : le serveur les calcule a partir des
+    // reglements et des penalites (ils etaient modifiables, donc falsifiables, avant).
+    saveMutation.mutate({
+      numFacture: numFacture.trim(),
+      clientName,
+      agentName: currentUser?.name || undefined,
+      ...(dateEmission ? { dateEmission } : {}),
+      echeance,
+      montantFacture: montant,
+    });
   };
 
   // Calculate days late for information
@@ -228,8 +184,12 @@ const DebtForm = () => {
                     id="numFacture"
                     name="numFacture"
                     value={formData.numFacture}
-                    className="bg-muted"
-                    readOnly
+                    onChange={handleInputChange}
+                    className={isEditing ? "bg-muted" : ""}
+                    readOnly={isEditing}
+                    required
+                    maxLength={100}
+                    placeholder="Ex. F2026-001"
                   />
                 </div>
 
@@ -287,45 +247,23 @@ const DebtForm = () => {
                   />
                 </div>
 
-                <div>
-                  <Label>Montant encaissé (MAD)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    name="montantEncaisse"
-                    value={formData.montantEncaisse}
-                    onChange={handleInputChange}
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div>
-                  <Label>Statut</Label>
-                  <Select
-                    value={formData.statut}
-                    onValueChange={(value) => handleSelectChange("statut", value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner un statut" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="PAYEE">Payée</SelectItem>
-                      <SelectItem value="IMPAYEE">Impayée</SelectItem>
-                      <SelectItem value="EN_RETARD">En retard</SelectItem>
-                      <SelectItem value="PENALISEE">Pénalisée</SelectItem>
-                      <SelectItem value="PARTIELLEMENT_PAYEE">Partiellement payée</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {isEditing && debtQuery.data && (
+                  <div className="sm:col-span-2 rounded-md border bg-muted/40 p-4 text-sm">
+                    <p className="font-medium">Calculés automatiquement</p>
+                    <p className="mt-1 text-muted-foreground">
+                      Montant encaissé : {formatCurrency(debtQuery.data.montantEncaisse)} MAD · Statut : {debtQuery.data.statut}
+                      . Ces valeurs découlent des règlements enregistrés et ne se modifient pas ici.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-4">
                 <Button type="button" variant="outline" onClick={() => navigate("/debts")}>
                   Annuler
                 </Button>
-                <Button type="submit" className="bg-debt-blue hover:bg-debt-lightBlue">
-                  {isEditing ? "Modifier" : "Créer"} la créance
+                <Button type="submit" className="bg-debt-blue hover:bg-debt-lightBlue" disabled={saveMutation.isPending}>
+                  {saveMutation.isPending ? "Enregistrement…" : `${isEditing ? "Modifier" : "Créer"} la créance`}
                 </Button>
               </div>
             </form>

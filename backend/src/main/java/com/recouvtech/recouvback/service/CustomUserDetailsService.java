@@ -18,10 +18,10 @@ public class CustomUserDetailsService implements UserDetailsService {
     /**
      * Renvoie l'entite Utilisateur elle-meme comme principal (elle implemente
      * UserDetails), et non un org.springframework...User generique : le
-     * principal doit porter l'organisation pour alimenter TenantContext.
+     * principal doit porter son departement (filtre SQL de chaque transaction).
      *
      * Utilisateur n'est pas cloisonne par @TenantId, precisement pour que cette
-     * resolution fonctionne avant que l'organisation soit connue.
+     * resolution fonctionne avant que le departement soit connu.
      */
     @Override
     @Transactional(readOnly = true)
@@ -31,7 +31,9 @@ public class CustomUserDetailsService implements UserDetailsService {
 
         // Force le chargement des associations EAGER avant detachement.
         user.getRole().getNom();
-        user.getOrganisation().getId();
+        if (user.getDepartement() != null) {
+            user.getDepartement().getId();
+        }
 
         return user;
     }

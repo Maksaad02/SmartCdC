@@ -15,7 +15,7 @@ public class Role {
     //Getters and Setters
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private long id;
+    private Long id;
 
     @Enumerated(EnumType.STRING)
     private RoleAgent nom;

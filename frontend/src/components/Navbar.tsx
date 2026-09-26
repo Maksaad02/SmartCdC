@@ -6,6 +6,7 @@ import {
   FileTextIcon,
   BanknoteIcon,
   Bell,
+  Building2,
   Users,
   LogOut
 } from "lucide-react";
@@ -58,6 +59,7 @@ const Navbar: React.FC = () => {
           {navItem("/payments", "Règlements", BanknoteIcon)}
           {navItem("/reminders", "Relances", Bell)}
           {navItem("/clients", "Clients", Users)}
+          {currentUser?.role === "admin" && navItem("/departements", "Départements", Building2)}
           {currentUser?.role === "admin" && navItem("/utilisateurs", "Utilisateurs", Users)}
         </nav>
 
@@ -77,6 +79,7 @@ const Navbar: React.FC = () => {
 
           <button
             onClick={logout}
+            aria-label="Se déconnecter"
             className="flex items-center gap-2 px-3 py-2 rounded-md text-white hover:bg-blue-600 transition duration-300"
           >
             <LogOut className="h-5 w-5" />

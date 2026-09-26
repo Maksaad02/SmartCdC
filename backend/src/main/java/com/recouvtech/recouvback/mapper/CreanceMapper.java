@@ -5,7 +5,6 @@ import com.recouvtech.recouvback.dto.CreanceDTO.CreanceResponseDTO;
 import com.recouvtech.recouvback.entity.Creance;
 import com.recouvtech.recouvback.entity.Client;
 import com.recouvtech.recouvback.entity.Utilisateur;
-import com.recouvtech.recouvback.entity.enums.StatutCreance;
 
 public class CreanceMapper {
     public static CreanceResponseDTO toDto(Creance creance) {
@@ -23,6 +22,10 @@ public class CreanceMapper {
         dto.setStatut(creance.getStatut() != null ? creance.getStatut().name() : null);
         dto.setAgentName(creance.getAgentRecouv() != null ? creance.getAgentRecouv().getNom() : null);
         dto.setClientName(creance.getClient() != null ? creance.getClient().getRaisonSociale() : null);
+        if (creance.getDepartement() != null) {
+            dto.setDepartementId(creance.getDepartement().getId());
+            dto.setDepartementNom(creance.getDepartement().getNom());
+        }
         return dto;
     }
 
@@ -33,10 +36,14 @@ public class CreanceMapper {
         creance.setDateEmission(dto.getDateEmission());
         creance.setEcheance(dto.getEcheance());
         creance.setMontantFacture(dto.getMontantFacture());
-        creance.setMontantEncaisse(dto.getMontantEncaisse());
-        creance.setStatut(dto.getStatut() != null ? StatutCreance.valueOf(dto.getStatut()) : null);
+        // montantEncaisse et statut ne viennent jamais de la requete : ils sont
+        // calculables uniquement a partir des reglements (ReglementService) et
+        // des penalites. Les accepter permettait a un agent de solder une dette
+        // sans aucun paiement.
         creance.setAgentRecouv(agent);
         creance.setClient(client);
+        // Le departement vient du client, jamais de la requete (cle etrangere composite en base).
+        creance.setDepartement(client.getDepartement());
         return creance;
     }
 
@@ -44,9 +51,9 @@ public class CreanceMapper {
         creance.setDateEmission(dto.getDateEmission());
         creance.setEcheance(dto.getEcheance());
         creance.setMontantFacture(dto.getMontantFacture());
-        creance.setMontantEncaisse(dto.getMontantEncaisse());
-        creance.setStatut(dto.getStatut() != null ? StatutCreance.valueOf(dto.getStatut()) : null);
         creance.setAgentRecouv(agent);
         creance.setClient(client);
+        // L'echeance ou le montant ont pu changer : le statut derive doit suivre.
+        creance.updateStatut();
     }
 } 

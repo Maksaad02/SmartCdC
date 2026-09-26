@@ -7,7 +7,8 @@ import com.recouvtech.recouvback.entity.enums.StatutRelance;
 import com.recouvtech.recouvback.entity.enums.TypeRelance;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.recouvtech.recouvback.event.RelanceCreeeEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -18,46 +19,51 @@ import java.time.LocalDateTime;
 @Slf4j
 public class RelanceAutomatiqueService {
 
-    @Autowired
-    private RelanceService relanceService;
+    private final RelanceService relanceService;
+    private final ApplicationEventPublisher eventPublisher;
 
-    @Autowired
-    private EmailService emailService;
-
+    /**
+     * Cree les trois relances d'une nouvelle creance. Appele DANS la transaction de
+     * creation de la creance : rien n'est envoye ici. L'e-mail de la relance
+     * immediate part apres le commit (RelanceEmailListener), donc jamais pour une
+     * creance finalement annulee.
+     */
     public void creerRelancesAutomatiques(Creance creance, Utilisateur agent) {
-        // 1. Relance immédiate (créée et envoyée automatiquement)
-        creerEtEnvoyerRelanceImmediate(creance, agent);
+        // 1. Relance immédiate : créée maintenant, envoyée après validation de la créance
+        Relance immediate = creerRelanceImmediate(creance, agent);
 
         // 2. Relance jour 30 (créée avec date programmée, en attente d'envoi manuel)
         creerRelanceJour30(creance, agent);
 
         // 3. Relance jour 60 (créée avec date programmée, en attente d'envoi manuel)
         creerRelanceJour60(creance, agent);
+
+        eventPublisher.publishEvent(new RelanceCreeeEvent(immediate.getId()));
     }
 
-    private void creerEtEnvoyerRelanceImmediate(Creance creance, Utilisateur agent) {
+    private Relance creerRelanceImmediate(Creance creance, Utilisateur agent) {
         Relance relance = new Relance();
         relance.setCreance(creance);
+        relance.setDepartement(creance.getDepartement());
         relance.setAgentRecouv(agent);
         relance.setTypeRelance(TypeRelance.EMAIL);
-        relance.setStatutRelance(StatutRelance.ENVOYEE); // Envoyée immédiatement
-        relance.setDateRelance(LocalDate.now()); // Date d'envoi = aujourd'hui
+        // EN_ATTENTE tant que l'e-mail n'est pas parti : ENVOYEE etait auparavant
+        // affiche avant meme la tentative d'envoi, meme si elle echouait ensuite.
+        relance.setStatutRelance(StatutRelance.EN_ATTENTE);
+        relance.setDateRelance(LocalDate.now());
         relance.setDateCreation(LocalDateTime.now());
-        relance.setDateEnvoi(LocalDateTime.now()); // Envoyée maintenant
         relance.setMessage("Votre facture N°" + creance.getNumFacture() +
                           " d'un montant de " + creance.getMontantFacture() +
                           " MAD est due le " + creance.getEcheance() +
                           ". Veuillez procéder au règlement dans les délais.");
 
-        relanceService.save(relance);
-
-        // Envoi automatique immédiat
-        envoyerRelanceImmediate(relance);
+        return relanceService.save(relance);
     }
 
     private void creerRelanceJour30(Creance creance, Utilisateur agent) {
         Relance relance = new Relance();
         relance.setCreance(creance);
+        relance.setDepartement(creance.getDepartement());
         relance.setAgentRecouv(agent);
         relance.setTypeRelance(TypeRelance.EMAIL);
         relance.setStatutRelance(StatutRelance.EN_ATTENTE); // Créée, en attente d'envoi manuel
@@ -75,6 +81,7 @@ public class RelanceAutomatiqueService {
     private void creerRelanceJour60(Creance creance, Utilisateur agent) {
         Relance relance = new Relance();
         relance.setCreance(creance);
+        relance.setDepartement(creance.getDepartement());
         relance.setAgentRecouv(agent);
         relance.setTypeRelance(TypeRelance.EMAIL);
         relance.setStatutRelance(StatutRelance.EN_ATTENTE); // Créée, en attente d'envoi manuel
@@ -93,18 +100,5 @@ public class RelanceAutomatiqueService {
                           "Veuillez régulariser votre situation rapidement pour les éviter.");
 
         relanceService.save(relance);
-    }
-
-    private void envoyerRelanceImmediate(Relance relance) {
-        try {
-            emailService.envoyerRelance(relance);
-            log.info("Relance immédiate envoyée automatiquement pour la créance: " +
-                    relance.getCreance().getNumFacture());
-        } catch (Exception e) {
-            log.error("Erreur lors de l'envoi automatique de la relance: " + e.getMessage());
-            relance.setStatutRelance(StatutRelance.ECHEC);
-            relance.setCommentaire("Échec de l'envoi automatique: " + e.getMessage());
-            relanceService.save(relance);
-        }
     }
 }

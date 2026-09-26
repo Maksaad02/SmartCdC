@@ -3,13 +3,14 @@ package com.recouvtech.recouvback.entity;
 import com.recouvtech.recouvback.entity.enums.ModePaiement;
 import com.recouvtech.recouvback.entity.enums.StatutReglement;
 import jakarta.persistence.*;
-import org.hibernate.annotations.TenantId;
+import org.hibernate.annotations.Filter;
 import lombok.*;
 
 import java.time.LocalDate;
 import java.math.BigDecimal;
 
 @Entity
+@Filter(name = Departement.FILTRE, condition = Departement.CONDITION)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,7 +19,7 @@ public class Reglement {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private long id;
+    private Long id;
 
     @Column(name = "montant", precision = 19, scale = 2)
     private BigDecimal montant;
@@ -39,17 +40,18 @@ public class Reglement {
 
 
     /**
-     * Organisation proprietaire. Renseignee et filtree automatiquement par
-     * Hibernate via @TenantId : ni les services ni les requetes n'ont a y penser.
+     * Departement du reglement : herite de sa creance a la creation, jamais fourni par l'appelant.
+     * Cloisonnement : filtre Hibernate "departement".
      */
-    @TenantId
-    @Column(name = "organisation_id", nullable = false)
-    private Long organisationId;
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "departement_id", nullable = false)
+    private Departement departement;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "creance_id")
     private Creance creance;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_agent_recouv")
     private Utilisateur agentRecouv;
 }

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -15,115 +16,72 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "../utils/formatters";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
+import { apiFetch, errorMessage } from "@/lib/apiClient";
+import { fetchAllPages } from "@/lib/pagedQueries";
+import { localDateIso } from "@/lib/dates";
+import { creanceSchema, relanceSchema } from "@/schemas";
+
+const MESSAGE_MAX = 1000; // relance.message : VARCHAR(1000)
 
 const ReminderForm = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const isEditing = !!id;
-  const { authToken, currentUser } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const { currentUser } = useAuth();
+  const [searchParams] = useSearchParams();
+  const debtIdFromUrl = searchParams.get("debtId");
 
-  // Get debt ID from URL query params if it exists
-  const urlParams = new URLSearchParams(window.location.search);
-  const debtIdFromUrl = urlParams.get('debtId');
-
+  // Valeurs de l'enum backend (TypeRelance, StatutRelance).
   const [formData, setFormData] = useState({
     numFacture: debtIdFromUrl || "",
-    dateRelance: new Date().toISOString().split("T")[0],
-    typeRelance: "email",
-    statutRelance: "en_attente",
-    commentaire: ""
+    dateRelance: localDateIso(),
+    typeRelance: "EMAIL",
+    statutRelance: "EN_ATTENTE",
+    message: ""
   });
 
-  const [debtsWithClients, setDebtsWithClients] = useState<any[]>([]);
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
-
-  // Fetch debts with remaining balance
+  // Creances non soldees pour la liste deroulante : toutes les pages (2000 maximum).
+  const debtsQuery = useQuery({
+    queryKey: ["/creances", "options"],
+    queryFn: ({ signal }) => fetchAllPages("/creances", creanceSchema, { maxItems: 2000, signal }),
+  });
   useEffect(() => {
-    const fetchDebts = async () => {
-      try {
-        // Fetch debts
-        const response = await fetch(`${API_URL}/creances`, {
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json"
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error("Erreur lors du chargement des créances");
-        }
-
-        const debts = await response.json();
-
-        // Fetch clients to get their email addresses
-        const clientsResponse = await fetch(`${API_URL}/clients`, {
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json"
-          }
-        });
-
-        if (!clientsResponse.ok) {
-          throw new Error("Erreur lors du chargement des clients");
-        }
-
-        const clients = await clientsResponse.json();
-
-        // Filter out paid debts and enrich with client email
-        const unpaidDebts = debts
-          .filter((debt: any) => debt.statut !== "PAYEE")
-          .map((debt: any) => {
-            const client = clients.find((c: any) => c.raisonSociale === debt.clientName);
-            return {
-              ...debt,
-              email: client?.email
-            };
-          });
-
-        setDebtsWithClients(unpaidDebts);
-      } catch (error) {
-        console.error("Error fetching debts:", error);
-        toast.error("Impossible de charger les créances");
-      }
-    };
-
-    fetchDebts();
-  }, [authToken]);
-
-  useEffect(() => {
-    if (isEditing && id) {
-      const fetchReminder = async () => {
-        setLoading(true);
-        try {
-          const response = await fetch(`${API_URL}/relances/${id}`, {
-            headers: {
-              "Authorization": `Bearer ${authToken}`,
-              "Content-Type": "application/json"
-            }
-          });
-
-          if (!response.ok) throw new Error("Relance non trouvée");
-
-          const reminder = await response.json();
-          setFormData({
-            numFacture: reminder.numFacture,
-            dateRelance: new Date(reminder.dateRelance).toISOString().split("T")[0],
-            typeRelance: reminder.typeRelance.toLowerCase(),
-            statutRelance: reminder.statutRelance.toLowerCase(),
-            commentaire: reminder.commentaire || ""
-          });
-        } catch (error) {
-          toast.error("Erreur lors du chargement de la relance");
-          navigate("/reminders");
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchReminder();
+    if (debtsQuery.isError) toast.error("Impossible de charger les créances");
+    if (debtsQuery.data?.truncated) {
+      toast.warning("Plus de 2000 créances : la liste est tronquée. Filtrez depuis la page Créances.");
     }
-  }, [id, isEditing, authToken, navigate]);
+  }, [debtsQuery.isError, debtsQuery.data?.truncated]);
+  const unpaidDebts = useMemo(
+    () => (debtsQuery.data?.items ?? []).filter((debt) => debt.statut !== "PAYEE"),
+    [debtsQuery.data],
+  );
+
+  const reminderQuery = useQuery({
+    queryKey: ["/relances", id],
+    queryFn: ({ signal }) => apiFetch(`/relances/${id}`, { schema: relanceSchema, signal }),
+    enabled: isEditing,
+  });
+  const loading = isEditing && reminderQuery.isLoading;
+
+  useEffect(() => {
+    const reminder = reminderQuery.data;
+    if (!reminder) return;
+    setFormData({
+      numFacture: reminder.numFacture ?? "",
+      dateRelance: reminder.dateRelance ?? localDateIso(),
+      typeRelance: reminder.typeRelance ?? "EMAIL",
+      statutRelance: reminder.statutRelance ?? "EN_ATTENTE",
+      message: reminder.message ?? reminder.commentaire ?? "",
+    });
+  }, [reminderQuery.data]);
+
+  useEffect(() => {
+    if (reminderQuery.isError) {
+      toast.error("Erreur lors du chargement de la relance");
+      navigate("/reminders");
+    }
+  }, [reminderQuery.isError, navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -134,80 +92,58 @@ const ReminderForm = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const saveMutation = useMutation({
+    mutationFn: async (payload: object) => {
+      const saved = await apiFetch(isEditing ? `/relances/${id}` : "/relances", {
+        method: isEditing ? "PUT" : "POST",
+        body: payload,
+        schema: relanceSchema,
+      });
+
+      // Nouvelle relance par e-mail : on la fait partir. Le destinataire est determine par le
+      // SERVEUR a partir de la creance : l'ancien appel a /sendMail, ou le navigateur fournissait
+      // destinataire, sujet et corps, a ete supprime (c'etait un relais de messagerie ouvert).
+      if (!isEditing && payload && (payload as { typeRelance: string }).typeRelance === "EMAIL"
+        && (payload as { statutRelance: string }).statutRelance === "EN_ATTENTE") {
+        try {
+          await apiFetch(`/relances/${saved.id}/envoyer`, { method: "POST", timeoutMs: 30_000 });
+          return { emailSent: true as const };
+        } catch (err) {
+          return { emailSent: false as const, emailError: errorMessage(err) };
+        }
+      }
+      return { emailSent: null };
+    },
+    onSuccess: (result) => {
+      if (result.emailSent === true) toast.success("Relance créée et e-mail envoyé avec succès");
+      else if (result.emailSent === false) toast.error(`La relance a été créée mais l'envoi de l'e-mail a échoué : ${result.emailError}`);
+      else toast.success(isEditing ? "Relance modifiée avec succès" : "Relance ajoutée avec succès");
+      queryClient.invalidateQueries({ queryKey: ["/relances"] });
+      navigate("/reminders");
+    },
+    onError: (err) => toast.error(errorMessage(err, "Erreur lors de l'enregistrement de la relance")),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
     if (!formData.numFacture || !formData.dateRelance || !formData.typeRelance || !formData.statutRelance) {
       toast.error("Veuillez remplir tous les champs obligatoires");
       return;
     }
+    if (formData.message.length > MESSAGE_MAX) {
+      toast.error(`Le message ne peut pas dépasser ${MESSAGE_MAX} caractères`);
+      return;
+    }
 
-    const payload = {
+    saveMutation.mutate({
       numFacture: formData.numFacture,
       dateRelance: formData.dateRelance,
-      typeRelance: formData.typeRelance.toUpperCase(),
-      statutRelance: formData.statutRelance.toUpperCase(),
-      commentaire: formData.commentaire || null,
-      agentName: currentUser?.name || "Agent"
-    };
-
-    try {
-      const url = isEditing
-        ? `${API_URL}/relances/${id}`
-        : `${API_URL}/relances`;
-
-      const methode = isEditing ? "PUT" : "POST";
-
-      const response = await fetch(url, {
-        method: methode,
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) throw new Error();
-
-      // If this is a new email reminder, send the email
-      if (!isEditing && formData.typeRelance.toLowerCase() === "email") {
-        // Get the client's email from the selected debt
-        const selectedDebt = debtsWithClients.find(debt => debt.numFacture === formData.numFacture);
-        if (selectedDebt?.email) {
-          // Send email using the sendMail endpoint
-          const emailPayload = {
-            recipient: selectedDebt.email,
-            subject: `Relance pour la facture ${formData.numFacture}`,
-            msgBody: formData.commentaire || `Nous vous rappelons le paiement de la facture ${formData.numFacture}.`
-          };
-
-          const emailResponse = await fetch(`${API_URL}/sendMail`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${authToken}`
-            },
-            body: JSON.stringify(emailPayload)
-          });
-
-          if (!emailResponse.ok) {
-            console.error("Failed to send email");
-            toast.error("La relance a été créée mais l'envoi de l'email a échoué");
-          } else {
-            toast.success("Relance créée et email envoyé avec succès");
-          }
-        } else {
-          toast.error("Impossible de trouver l'email du client");
-        }
-      } else {
-        toast.success(isEditing ? "Relance modifiée avec succès" : "Relance ajoutée avec succès");
-      }
-
-      navigate("/reminders");
-    } catch (err) {
-      toast.error("Erreur lors de l'enregistrement de la relance");
-    }
+      typeRelance: formData.typeRelance,
+      statutRelance: formData.statutRelance,
+      message: formData.message.trim() || undefined,
+      agentName: currentUser?.name || undefined,
+    });
   };
 
   return (
@@ -242,9 +178,9 @@ const ReminderForm = () => {
                       <SelectValue placeholder="Sélectionner une créance" />
                     </SelectTrigger>
                     <SelectContent>
-                      {debtsWithClients.map((debt: any) => (
+                      {unpaidDebts.map((debt) => (
                         <SelectItem key={debt.numFacture} value={debt.numFacture}>
-                          {debt.numFacture} - {debt.clientName} ({formatCurrency(debt.montantFacture - (debt.montantEncaisse || 0))} MAD)
+                          {debt.numFacture} - {debt.clientName} ({formatCurrency(debt.solde)} MAD)
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -261,9 +197,10 @@ const ReminderForm = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="email">Email</SelectItem>
-                      <SelectItem value="telephone">Téléphone</SelectItem>
-                      <SelectItem value="courrier">Courrier</SelectItem>
+                      <SelectItem value="EMAIL">Email</SelectItem>
+                      <SelectItem value="TELEPHONE">Téléphone</SelectItem>
+                      <SelectItem value="COURRIER">Courrier</SelectItem>
+                      <SelectItem value="VISITE">Visite</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -289,24 +226,28 @@ const ReminderForm = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="en_attente">En attente</SelectItem>
-                      <SelectItem value="envoyee">Envoyée</SelectItem>
-                      <SelectItem value="repondue">Répondue</SelectItem>
+                      <SelectItem value="EN_ATTENTE">En attente</SelectItem>
+                      <SelectItem value="ENVOYEE">Envoyée</SelectItem>
+                      <SelectItem value="EFFECTUEE">Effectuée</SelectItem>
+                      <SelectItem value="REPORTEE">Reportée</SelectItem>
+                      <SelectItem value="ANNULEE">Annulée</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="commentaire">Contenue Email</Label>
+                  <Label htmlFor="message">Contenu du message</Label>
                   <Textarea
-                    id="commentaire"
-                    name="commentaire"
-                    placeholder="Saisissez le contenue de l'email sur cette relance..."
-                    value={formData.commentaire}
+                    id="message"
+                    name="message"
+                    placeholder="Contenu de l'e-mail ou note sur la relance (un rappel standard est envoyé si vide)..."
+                    value={formData.message}
                     onChange={handleInputChange}
                     rows={4}
+                    maxLength={MESSAGE_MAX}
                     className="resize-none"
                   />
+                  <p className="text-xs text-muted-foreground text-right">{formData.message.length}/{MESSAGE_MAX}</p>
                 </div>
               </div>
 
@@ -318,8 +259,8 @@ const ReminderForm = () => {
                 >
                   Annuler
                 </Button>
-                <Button type="submit" className="bg-debt-blue hover:bg-debt-lightBlue">
-                  {isEditing ? "Modifier" : "Ajouter"} la relance
+                <Button type="submit" className="bg-debt-blue hover:bg-debt-lightBlue" disabled={saveMutation.isPending}>
+                  {saveMutation.isPending ? "Enregistrement…" : `${isEditing ? "Modifier" : "Ajouter"} la relance`}
                 </Button>
               </div>
             </form>

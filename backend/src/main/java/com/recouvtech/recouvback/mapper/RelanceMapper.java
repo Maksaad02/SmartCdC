@@ -17,6 +17,14 @@ public class RelanceMapper {
         dto.setTypeRelance(relance.getTypeRelance());
         dto.setStatutRelance(relance.getStatutRelance());
         dto.setCommentaire(relance.getCommentaire());
+        dto.setMessage(relance.getMessage());
+        if (relance.getCreance() != null) {
+            dto.setEcheance(relance.getCreance().getEcheance());
+            dto.setJoursRetard(relance.getCreance().getJoursRetard());
+            if (relance.getCreance().getClient() != null) {
+                dto.setClientName(relance.getCreance().getClient().getRaisonSociale());
+            }
+        }
         return dto;
     }
 
@@ -24,11 +32,14 @@ public class RelanceMapper {
         if (dto == null) return null;
         Relance relance = new Relance();
         relance.setCreance(creance);
+        // Herite du departement de la creance, jamais de la requete.
+        relance.setDepartement(creance.getDepartement());
         relance.setAgentRecouv(agent);
         relance.setDateRelance(dto.getDateRelance());
         relance.setTypeRelance(dto.getTypeRelance());
         relance.setStatutRelance(dto.getStatutRelance());
         relance.setCommentaire(dto.getCommentaire());
+        relance.setMessage(dto.getMessage());
         return relance;
     }
 
@@ -39,5 +50,9 @@ public class RelanceMapper {
         relance.setTypeRelance(dto.getTypeRelance());
         relance.setStatutRelance(dto.getStatutRelance());
         relance.setCommentaire(dto.getCommentaire());
+        // Absent de la requete : conserver le message existant plutot que de l'effacer.
+        if (dto.getMessage() != null) {
+            relance.setMessage(dto.getMessage());
+        }
     }
 } 

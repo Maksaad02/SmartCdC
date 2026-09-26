@@ -19,4 +19,6 @@ public class CreanceResponseDTO {
     private String statut;
     private String agentName;
     private String clientName;
+    private Long departementId;
+    private String departementNom;
 }

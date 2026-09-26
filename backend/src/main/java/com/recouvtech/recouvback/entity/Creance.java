@@ -2,7 +2,7 @@ package com.recouvtech.recouvback.entity;
 
 import com.recouvtech.recouvback.entity.enums.StatutCreance;
 import jakarta.persistence.*;
-import org.hibernate.annotations.TenantId;
+import org.hibernate.annotations.Filter;
 import lombok.*;
 import org.hibernate.annotations.SQLRestriction;
 
@@ -27,13 +27,14 @@ import java.util.Objects;
 @NoArgsConstructor
 @AllArgsConstructor
 @SQLRestriction("supprimee = false")
+@Filter(name = Departement.FILTRE, condition = Departement.CONDITION)
 public class Creance {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "num_facture", nullable = false) // unique par organisation, cf. migration V2
+    @Column(name = "num_facture", nullable = false) // unique dans l'entreprise, cf. migration V7
     private String numFacture;
 
     @Column(name = "date_emission")
@@ -64,17 +65,18 @@ public class Creance {
 
 
     /**
-     * Organisation proprietaire. Renseignee et filtree automatiquement par
-     * Hibernate via @TenantId : ni les services ni les requetes n'ont a y penser.
+     * Departement de la creance : toujours celui de son client (cle etrangere composite en base).
+     * Cloisonnement : filtre Hibernate "departement".
      */
-    @TenantId
-    @Column(name = "organisation_id", nullable = false)
-    private Long organisationId;
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "departement_id", nullable = false)
+    private Departement departement;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agent_recouv")
     private Utilisateur agentRecouv;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "client_id")
     private Client client;
 

@@ -8,4 +8,7 @@ public class UtilisateurResponseDTO {
     private String nom;
     private String email;
     private String role;
+    /** null pour un ADMIN (vision globale). */
+    private Long departementId;
+    private String departementNom;
 }

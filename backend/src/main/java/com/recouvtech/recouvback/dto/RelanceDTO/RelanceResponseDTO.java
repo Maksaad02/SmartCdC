@@ -16,4 +16,9 @@ public class RelanceResponseDTO {
     private TypeRelance typeRelance;
     private StatutRelance statutRelance;
     private String commentaire;
+    private String message;
+    /** Client et retard de la creance : evite au front un appel par relance pour les recuperer. */
+    private String clientName;
+    private LocalDate echeance;
+    private int joursRetard;
 }

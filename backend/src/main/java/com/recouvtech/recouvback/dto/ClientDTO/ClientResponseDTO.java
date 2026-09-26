@@ -13,4 +13,6 @@ public class ClientResponseDTO {
     private String ice;
     private String identiteFiscale;
     private String agentName;
+    private Long departementId;
+    private String departementNom;
 }

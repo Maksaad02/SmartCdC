@@ -4,6 +4,7 @@ import com.recouvtech.recouvback.filter.JwtAuthenticationFilter;
 import com.recouvtech.recouvback.security.ApiKeyAuthFilter;
 import com.recouvtech.recouvback.service.CustomUserDetailsService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import jakarta.servlet.DispatcherType;
@@ -14,8 +15,9 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -34,6 +36,19 @@ public class SecurityConfig {
     private final CustomUserDetailsService userDetailsService;
     private final JwtAuthenticationFilter jwtFilter;
     private final ApiKeyAuthFilter apiKeyAuthFilter;
+    private final PasswordEncoder passwordEncoder;
+
+    /**
+     * Origines autorisees a appeler l'API depuis un navigateur (separees par des
+     * virgules). Aucun defaut dans le profil prod : un deploiement sans origine
+     * explicite doit echouer plutot que d'accepter n'importe quel site.
+     */
+    @Value("${app.cors.allowed-origins}")
+    private String[] allowedOrigins;
+
+    /** Port d'administration (Prometheus), interne au reseau Docker et jamais publie ; -1 = non configure. */
+    @Value("${management.server.port:-1}")
+    private int managementPort;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -49,17 +64,29 @@ public class SecurityConfig {
                         // l'agent au lieu d'afficher un refus.
                         .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD).permitAll()
 
+                        // Sondes de sante (Docker, orchestrateur) : publiques mais limitees a
+                        // /health, qui ne renvoie que UP/DOWN sans detail. Tout autre endpoint
+                        // actuator n'est de toute facon pas expose (voir management.*).
+                        .requestMatchers("/actuator/health/**").permitAll()
+                        // Metriques : ouvertes UNIQUEMENT sur le port d'administration interne. Sur le port
+                        // public, /actuator/prometheus n'est de toute facon pas expose, et cette regle ne
+                        // s'y appliquerait pas.
+                        .requestMatchers(request -> managementPort > 0
+                                && request.getLocalPort() == managementPort
+                                && request.getRequestURI().startsWith("/actuator/")).permitAll()
+
                         // API chatbot : double controle. ApiKeyAuthFilter verifie la cle de
                         // service, et .authenticated() impose en plus un JWT utilisateur valide,
                         // pour que le chatbot herite exactement des droits de l'agent appelant
                         // au lieu de disposer d'un acces global non cloisonne.
                         .requestMatchers("/api/external/**").authenticated()
 
-                        // Seul le login est public. La creation de compte est reservee aux ADMIN
-                        // (voir C-5 : /api/register ouvert + /utilisateurs/{id}/role non protege
-                        // permettait a un anonyme de devenir ADMIN en deux requetes).
+                        // Seul le login est public. La creation de compte (POST /api/utilisateurs) est
+                        // reservee aux ADMIN.
                         .requestMatchers("/api/login").permitAll()
-                        .requestMatchers("/api/register").hasRole("ADMIN")
+                        // Renouvellement et deconnexion : authentifies par le cookie de renouvellement,
+                        // pas par un jeton d'acces (qui peut etre expire au moment d'y recourir).
+                        .requestMatchers("/api/auth/refresh", "/api/auth/logout").permitAll()
                         // .requestMatchers(HttpMethod.GET, "/api/reglements/**").permitAll() // ⬅️
                         // Allow GET on reglements
                         // Autoriser les preflight CORS (navigateur)
@@ -81,27 +108,33 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * ADMIN > MANAGER > AGENT : un role superieur dispose des droits des roles inferieurs
+     * (hasRole('MANAGER') accepte un ADMIN). La hierarchie ne joue que pour l'AUTORISATION :
+     * le perimetre de donnees (departement, portefeuille) est decide par CurrentUser sur le role exact.
+     * Bean statique : requis pour la securite par methode (@PreAuthorize).
+     */
+    @Bean
+    static RoleHierarchy roleHierarchy() {
+        return RoleHierarchyImpl.fromHierarchy(
+                "ROLE_ADMIN > ROLE_MANAGER\nROLE_MANAGER > ROLE_AGENT");
+    }
+
     @Bean
     public AuthenticationManager authManager(HttpSecurity http) throws Exception {
         AuthenticationManagerBuilder builder = http.getSharedObject(AuthenticationManagerBuilder.class);
 
         builder
                 .userDetailsService(userDetailsService)
-                .passwordEncoder(passwordEncoder());
+                .passwordEncoder(passwordEncoder);
 
         return builder.build();
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-
-    @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList(
-                "http://localhost:*"));
+        configuration.setAllowedOriginPatterns(Arrays.asList(allowedOrigins));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept"));
         configuration.setAllowCredentials(true);

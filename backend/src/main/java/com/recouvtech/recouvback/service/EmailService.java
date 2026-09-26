@@ -1,15 +1,16 @@
 package com.recouvtech.recouvback.service;
 
-import com.recouvtech.recouvback.entity.Relance;
-
 public interface EmailService {
 
     /**
-     * Envoie la relance au client de la creance concernee.
+     * Envoie un e-mail texte. Leve une exception si l'envoi echoue (SMTP
+     * indisponible, adresse refusee...) : c'est a l'appelant de decider quoi en
+     * faire, ici il n'y a aucune relance ni statut.
      *
-     * Le destinataire est derive de la creance, jamais fourni par l'appelant :
-     * l'ancien sendSimpleMail(EmailDetails) exposait destinataire, sujet et corps
-     * et transformait /api/sendMail en relais de messagerie ouvert.
+     * Le destinataire n'est jamais fourni par un client de l'API : l'ancien
+     * sendSimpleMail(EmailDetails) exposait destinataire, sujet et corps et
+     * transformait /api/sendMail en relais de messagerie ouvert. Il est derive
+     * de la creance par RelanceEnvoiService.
      */
-    String envoyerRelance(Relance relance);
+    void envoyer(String destinataire, String sujet, String texte);
 }

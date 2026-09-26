@@ -1,0 +1,66 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 5 * * 1" # chaque lundi : de nouvelles CVE apparaissent sans changement de code
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Detection de secrets (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tout l'historique, pas seulement le dernier commit
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 \
+            detect --source /repo --redact --verbose --exit-code 1
+
+  dependencies:
+    name: Vulnerabilites des dependances (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy (pom.xml, package-lock.json, Dockerfile)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          scanners: vuln,misconfig
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: npm audit
+        working-directory: frontend
+        run: npm audit --audit-level=high --omit=dev
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [java-kotlin, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}

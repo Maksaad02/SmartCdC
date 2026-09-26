@@ -3,7 +3,6 @@ package org.maksaad.recouvchatbot_rag.security;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -18,30 +17,37 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.Key;
+import java.security.PublicKey;
 import java.util.List;
 
 /**
- * Valide le JWT emis par le backend et memorise le jeton brut pour la duree de
- * la requete.
+ * Valide le JWT emis par le backend et memorise le jeton brut pour la duree de la requete.
  *
- * Le service ne disposait d'aucune authentification : /chat/ask etait accessible
- * publiquement et ses outils interrogeaient l'ensemble des clients et creances.
+ * Verification par CLE PUBLIQUE (RS256) : ce service peut verifier un jeton mais n'a aucun moyen d'en
+ * fabriquer un. Avec l'ancien secret HS256 partage avec le backend, la compromission du chatbot --
+ * le composant expose aux injections de prompt et a un fournisseur d'IA tiers -- aurait permis de
+ * forger un jeton SUPER_ADMIN valable pour toute la plateforme.
+ *
+ * Le jeton doit avoir ete emis pour ce service (aud = smartcdc-chat) par l'emetteur attendu.
  */
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
+    public static final String AUDIENCE = "smartcdc-chat";
+
     private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
 
-    @Value("${app.secret-key}")
-    private String secretKey;
+    @Value("${app.jwt.public-key}")
+    private String publicKeyPem;
 
-    private Key signingKey;
+    @Value("${app.jwt.issuer:smartcdc}")
+    private String issuer;
+
+    private PublicKey publicKey;
 
     @PostConstruct
     void init() {
-        this.signingKey = Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
+        this.publicKey = PemPublicKey.parse(publicKeyPem);
     }
 
     @Override
@@ -54,11 +60,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
             try {
-                Claims claims = Jwts.parserBuilder()
-                        .setSigningKey(signingKey)
+                Claims claims = Jwts.parser()
+                        .verifyWith(publicKey)
+                        .requireIssuer(issuer)
+                        .requireAudience(AUDIENCE)
                         .build()
-                        .parseClaimsJws(token)
-                        .getBody();
+                        .parseSignedClaims(token)
+                        .getPayload();
 
                 String username = claims.getSubject();
                 if (username != null) {
@@ -67,9 +75,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(auth);
                     CallerToken.set(token);
                 }
-            } catch (JwtException e) {
-                // Jeton invalide ou expire : on n'authentifie pas, Spring Security
-                // repondra 401. Le jeton lui-meme n'est jamais journalise.
+            } catch (JwtException | IllegalArgumentException e) {
+                // Jeton invalide, expire, vide ou destine a un autre service : on n'authentifie pas,
+                // Spring Security repondra 401. IllegalArgumentException : jjwt le leve pour un jeton
+                // vide ("Authorization: Bearer "), ce qui provoquait une erreur 500. Le jeton lui-meme
+                // n'est jamais journalise.
                 SecurityContextHolder.clearContext();
                 log.debug("Jeton JWT rejeté : {}", e.getClass().getSimpleName());
             }

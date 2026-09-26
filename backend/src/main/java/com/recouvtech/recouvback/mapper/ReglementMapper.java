@@ -34,6 +34,8 @@ public class ReglementMapper {
         reglement.setStatut(dto.getStatut());
         reglement.setReference(dto.getReference());
         reglement.setCreance(creance);
+        // Herite du departement de la creance, jamais de la requete.
+        reglement.setDepartement(creance.getDepartement());
         reglement.setAgentRecouv(agent);
         return reglement;
     }

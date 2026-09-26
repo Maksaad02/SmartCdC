@@ -7,7 +7,7 @@ import Chatbot from "./Chatbot";
 
 
 const Layout: React.FC = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, currentUser } = useAuth();
 
   // Attendre la fin de la revalidation avant de trancher : rediriger pendant le
   // chargement déconnectait l'utilisateur à chaque rafraîchissement de page.
@@ -28,7 +28,9 @@ const Layout: React.FC = () => {
       <Navbar />
       <main className="pt-16 px-6">
         <Outlet />
-        <Chatbot />
+        {/* Assistant IA : reserve aux administrateurs (module inactif pour le moment). Masquer l'interface
+            n'est pas une autorisation : les donnees restent cloisonnees par departement cote serveur. */}
+        {currentUser?.role === "admin" && <Chatbot />}
       </main>
     </div>
   );

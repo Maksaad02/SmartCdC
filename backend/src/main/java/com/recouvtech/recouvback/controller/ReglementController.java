@@ -4,7 +4,11 @@ import com.recouvtech.recouvback.dto.ReglementDTO.ReglementRequestDTO;
 import com.recouvtech.recouvback.dto.ReglementDTO.ReglementResponseDTO;
 import com.recouvtech.recouvback.entity.enums.StatutReglement;
 import com.recouvtech.recouvback.service.ReglementService;
+import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,13 +21,17 @@ public class ReglementController {
     private final ReglementService reglementService;
 
     @PostMapping
-    public ReglementResponseDTO create(@RequestBody ReglementRequestDTO dto) {
+    public ReglementResponseDTO create(@Valid @RequestBody ReglementRequestDTO dto) {
         return reglementService.create(dto);
     }
 
+    /** Liste paginee. Parametres : page, size (max 200), sort, q, statut, numFacture. */
     @GetMapping()
-    public List<ReglementResponseDTO> getAll() {
-        return reglementService.getAll();
+    public Page<ReglementResponseDTO> getAll(@RequestParam(required = false) String q,
+                                             @RequestParam(required = false) StatutReglement statut,
+                                             @RequestParam(required = false) String numFacture,
+                                             Pageable pageable) {
+        return reglementService.list(q, statut, numFacture, pageable);
     }
 
     @GetMapping("/{id}")
@@ -32,7 +40,7 @@ public class ReglementController {
     }
 
     @PutMapping("/{id}")
-    public ReglementResponseDTO update(@PathVariable Long id, @RequestBody ReglementRequestDTO dto) {
+    public ReglementResponseDTO update(@PathVariable Long id, @Valid @RequestBody ReglementRequestDTO dto) {
         return reglementService.update(id, dto);
     }
 
@@ -41,6 +49,7 @@ public class ReglementController {
         return reglementService.updateStatus(id, newStatus);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Long id) {
         reglementService.delete(id);

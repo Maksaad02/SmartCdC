@@ -1,0 +1,87 @@
+# Rendu au demarrage du conteneur par le script d'entree de l'image nginx
+# (envsubst) : seules les variables definies dans l'environnement sont
+# remplacees, les variables nginx ($uri, $host...) restent intactes.
+
+# Resolution DNS a l'execution (DNS interne de Docker) : nginx demarre meme si
+# le backend n'est pas encore pret, au lieu d'echouer avec "host not found".
+resolver 127.0.0.11 valid=10s ipv6=off;
+
+server {
+    listen 8080;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    server_tokens off;
+    client_max_body_size 2m;
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript image/svg+xml;
+    gzip_min_length 1024;
+
+    # --- En-tetes de securite ---
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+    # Aucune ressource externe n'est chargee : tout vient de la meme origine.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+
+    # --- API backend ---
+    location /api/ {
+        set $backend ${BACKEND_UPSTREAM};
+        proxy_pass $backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        # Identifiant de correlation : cree ici (ou repris de l'amont) et propage aux services.
+        proxy_set_header X-Request-Id $request_id;
+        proxy_read_timeout 60s;
+    }
+
+    # --- Chatbot (RAG) : un appel LLM peut etre long ---
+    location /chat/ {
+        set $rag ${RAG_UPSTREAM};
+        proxy_pass $rag;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header X-Request-Id $request_id;
+        # Flux SSE (/chat/ask/stream) : connexion HTTP/1.1 persistante, sans tampon, pour que chaque
+        # morceau de reponse atteigne le navigateur immediatement.
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_read_timeout 180s;
+        proxy_buffering off;
+        proxy_cache off;
+    }
+
+    # Sonde de sante du conteneur (ne traverse pas les services).
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # Fichiers versionnes par Vite (hash dans le nom) : cache long.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        # Les add_header d'un bloc location masquent ceux du serveur : on
+        # repete donc ceux qui comptent.
+        add_header X-Content-Type-Options "nosniff" always;
+        try_files $uri =404;
+    }
+
+    # Application monopage : toute route inconnue est geree par React Router.
+    location / {
+        add_header Cache-Control "no-cache";
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+        try_files $uri $uri/ /index.html;
+    }
+}

@@ -3,6 +3,9 @@ package com.recouvtech.recouvback.controller;
 import com.recouvtech.recouvback.dto.ClientDTO.ClientRequestDTO;
 import com.recouvtech.recouvback.dto.ClientDTO.ClientResponseDTO;
 import com.recouvtech.recouvback.service.ClientService;
+import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -17,13 +20,14 @@ public class ClientController {
     private final ClientService clientService;
 
     @PostMapping
-    public ClientResponseDTO createClient(@RequestBody ClientRequestDTO dto) {
+    public ClientResponseDTO createClient(@Valid @RequestBody ClientRequestDTO dto) {
         return clientService.createClient(dto);
     }
 
+    /** Liste paginee. Parametres : page, size (max 200), sort, q (recherche). */
     @GetMapping
-    public List<ClientResponseDTO> getAllClients() {
-        return clientService.getAllClients();
+    public Page<ClientResponseDTO> getAllClients(@RequestParam(required = false) String q, Pageable pageable) {
+        return clientService.list(q, pageable);
     }
 
     @GetMapping("/{id}")
@@ -32,7 +36,7 @@ public class ClientController {
     }
 
     @PutMapping("/{id}")
-    public ClientResponseDTO updateClient(@PathVariable Long id, @RequestBody ClientRequestDTO dto) {
+    public ClientResponseDTO updateClient(@PathVariable Long id, @Valid @RequestBody ClientRequestDTO dto) {
         return clientService.updateClient(id, dto);
     }
 

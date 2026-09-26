@@ -3,6 +3,10 @@ package com.recouvtech.recouvback.controller;
 import com.recouvtech.recouvback.dto.UtilisateurDTO.UtilisateurRequestDTO;
 import com.recouvtech.recouvback.dto.UtilisateurDTO.UtilisateurResponseDTO;
 import com.recouvtech.recouvback.service.UtilisateurService;
+import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import com.recouvtech.recouvback.entity.enums.RoleAgent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +27,7 @@ public class UtilisateurController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
-    public ResponseEntity<UtilisateurResponseDTO> create(@RequestBody UtilisateurRequestDTO dto) {
+    public ResponseEntity<UtilisateurResponseDTO> create(@Valid @RequestBody UtilisateurRequestDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(utilisateurService.create(dto));
     }
@@ -37,8 +41,11 @@ public class UtilisateurController {
     
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
-    public List<UtilisateurResponseDTO> getAll() {
-        return utilisateurService.getAll();
+    public Page<UtilisateurResponseDTO> getAll(@RequestParam(required = false) String q,
+                                               @RequestParam(required = false) RoleAgent role,
+                                               @RequestParam(required = false) Long departementId,
+                                               Pageable pageable) {
+        return utilisateurService.list(q, role, departementId, pageable);
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -49,7 +56,7 @@ public class UtilisateurController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
-    public UtilisateurResponseDTO update(@PathVariable Long id, @RequestBody UtilisateurRequestDTO dto) {
+    public UtilisateurResponseDTO update(@PathVariable Long id, @Valid @RequestBody UtilisateurRequestDTO dto) {
         return utilisateurService.update(id, dto);
     }
 
@@ -60,8 +67,11 @@ public class UtilisateurController {
     }
 
     @PreAuthorize("hasRole('ADMIN')")
-    @PutMapping("/{id}/role") /**/
-    public UtilisateurResponseDTO updateRole(@PathVariable Long id, @RequestBody Map<String, String> payload) {
-        return utilisateurService.updateRole(id, payload.get("role"));
+    @PutMapping("/{id}/role")
+    public UtilisateurResponseDTO updateRole(@PathVariable Long id, @RequestBody RoleChange payload) {
+        return utilisateurService.updateRole(id, payload.role(), payload.departementId());
     }
+
+    /** Corps de PUT /{id}/role : departementId n'est requis que vers MANAGER/AGENT pour un compte qui n'en a pas. */
+    public record RoleChange(String role, Long departementId) {}
 }

@@ -15,7 +15,7 @@ public class RoleInitializer {
 
     @PostConstruct
     public void initRoles() {
-        // Idempotent par role : l'ajout de SUPER_ADMIN doit aussi s'appliquer a
+        // Idempotent par role : l'ajout d'un role (MANAGER) doit aussi s'appliquer a
         // une base existante, ou count() != 0.
         for (RoleAgent nom : RoleAgent.values()) {
             if (roleRepository.findByNom(nom).isEmpty()) {

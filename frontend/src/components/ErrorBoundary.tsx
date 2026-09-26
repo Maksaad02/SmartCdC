@@ -1,38 +1,67 @@
 import React from "react";
+import { reportError } from "@/lib/reportError";
 
 interface Props {
   children: React.ReactNode;
+  /**
+   * Quand cette valeur change (ex. la route), l'erreur est effacee : sans cela,
+   * naviguer vers une autre page laissait l'ecran d'erreur affiche.
+   */
+  resetKey?: unknown;
+  /**
+   * "app" : boundary racine, hors du routeur et des providers ; "Reessayer"
+   * recharge la page. "page" : boundary de route, "Reessayer" remonte le
+   * sous-arbre sans recharger.
+   */
+  variant?: "app" | "page";
 }
 
 interface State {
   hasError: boolean;
+  /** Incremente a chaque reessai : sert de `key` pour remonter vraiment le sous-arbre. */
+  attempt: number;
 }
 
 /**
- * Filet de sécurité de rendu.
+ * Filet de securite de rendu.
  *
- * Sans cela, une exception levée pendant le rendu d'une page démonte tout l'arbre
- * React et laisse une page blanche sans recours.
+ * Sans cela, une exception levee pendant le rendu d'une page demonte tout
+ * l'arbre React et laisse une page blanche sans recours.
  */
 class ErrorBoundary extends React.Component<Props, State> {
-  state: State = { hasError: false };
+  state: State = { hasError: false, attempt: 0 };
 
-  static getDerivedStateFromError(): State {
+  static getDerivedStateFromError(): Partial<State> {
     return { hasError: true };
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error("Erreur de rendu non interceptée:", error, info.componentStack);
+    reportError(error, { componentStack: info.componentStack });
   }
 
-  handleReset = () => {
-    this.setState({ hasError: false });
+  componentDidUpdate(prevProps: Props) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState(s => ({ hasError: false, attempt: s.attempt + 1 }));
+    }
+  }
+
+  handleRetry = () => {
+    if (this.props.variant === "app") {
+      window.location.reload();
+      return;
+    }
+    // Sans changer `attempt`, React re-rendrait le meme composant qui
+    // re-leverait aussitot la meme erreur.
+    this.setState(s => ({ hasError: false, attempt: s.attempt + 1 }));
   };
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-[#F3F4F6] p-6">
+        <div
+          role="alert"
+          className="min-h-screen flex items-center justify-center bg-[#F3F4F6] p-6"
+        >
           <div className="max-w-md w-full bg-white border border-gray-200 rounded-lg shadow-sm p-6 text-center">
             <h1 className="text-lg font-semibold text-gray-900 mb-2">
               Une erreur est survenue
@@ -43,7 +72,7 @@ class ErrorBoundary extends React.Component<Props, State> {
             </p>
             <div className="flex gap-3 justify-center">
               <button
-                onClick={this.handleReset}
+                onClick={this.handleRetry}
                 className="px-4 py-2 rounded bg-blue-500 text-white text-sm hover:bg-blue-600 transition"
               >
                 Réessayer
@@ -60,7 +89,7 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    return this.props.children;
+    return <React.Fragment key={this.state.attempt}>{this.props.children}</React.Fragment>;
   }
 }
 

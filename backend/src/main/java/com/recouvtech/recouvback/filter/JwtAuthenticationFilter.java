@@ -2,7 +2,6 @@ package com.recouvtech.recouvback.filter;
 
 import com.recouvtech.recouvback.configuration.JwtUtils;
 import com.recouvtech.recouvback.entity.Utilisateur;
-import com.recouvtech.recouvback.security.TenantContext;
 import com.recouvtech.recouvback.service.CustomUserDetailsService;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -40,25 +39,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String jwtToken = authHeader.substring(7);
             try {
-                String username = jwtUtils.extractUsername(jwtToken);
+                // Une seule verification : signature, expiration, emetteur et destinataire.
+                String username = jwtUtils.parse(jwtToken).getSubject();
 
                 if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                     UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                    if (jwtUtils.isTokenValid(jwtToken, userDetails.getUsername())) {
+                    if (username.equals(userDetails.getUsername())) {
                         UsernamePasswordAuthenticationToken authToken =
                                 new UsernamePasswordAuthenticationToken(
                                         userDetails, null, userDetails.getAuthorities());
                         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        // Le departement du principal alimente le filtre SQL de chaque transaction
+                        // (DepartementFilterTransactionManager) : rien d'autre a positionner ici.
                         SecurityContextHolder.getContext().setAuthentication(authToken);
-
-                        // Doit etre positionne AVANT la suite de la chaine : Hibernate
-                        // lit l'organisation courante a chaque requete cloisonnee.
-                        if (userDetails instanceof Utilisateur u && u.getOrganisation() != null) {
-                            TenantContext.set(u.getOrganisation().getId());
-                        }
                     }
                 }
-            } catch (JwtException | UsernameNotFoundException e) {
+            } catch (JwtException | IllegalArgumentException | UsernameNotFoundException e) {
+                // IllegalArgumentException : jjwt le leve pour un jeton vide ("Authorization: Bearer "),
+                // qui provoquait auparavant une erreur 500 declenchable par n'importe qui.
                 // Jeton expire, malforme ou signature invalide : on laisse passer sans
                 // authentifier, l'AuthenticationEntryPoint repondra 401. Auparavant
                 // l'exception remontait et produisait une 500 avec stacktrace.
@@ -68,12 +66,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
 
-        try {
-            filterChain.doFilter(request, response);
-        } finally {
-            // Les threads sont recycles par le conteneur : sans nettoyage, la
-            // requete suivante heriterait de l'organisation de la precedente.
-            TenantContext.clear();
-        }
+        filterChain.doFilter(request, response);
     }
 }

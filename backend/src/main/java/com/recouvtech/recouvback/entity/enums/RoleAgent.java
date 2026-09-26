@@ -2,12 +2,12 @@ package com.recouvtech.recouvback.entity.enums;
 
 public enum RoleAgent {
 
-    /** Exploitant de la plateforme : seul role voyant au-dela d'une organisation. */
-    SUPER_ADMIN,
-
-    /** Administrateur DE SON organisation. Ne voit rien des autres. */
+    /** Administrateur d'entreprise : vision globale, gere tous les departements. */
     ADMIN,
 
-    /** Agent de recouvrement : limite a son propre portefeuille. */
+    /** Gestionnaire de departement : voit et gere tout son departement, rien d'un autre. */
+    MANAGER,
+
+    /** Agent de recouvrement : limite a son propre portefeuille, dans son departement. */
     AGENT,
 }

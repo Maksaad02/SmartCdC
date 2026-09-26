@@ -60,7 +60,8 @@ class UtilisateurMapperTest {
         assertNotNull(result);
         assertEquals(requestDTO.getNom(), result.getNom());
         assertEquals(requestDTO.getEmail(), result.getEmail());
-        assertEquals(requestDTO.getMotDePasse(), result.getMotDePasse());
+        // Le mapper ne copie jamais le mot de passe : le service le hache d'abord.
+        assertNull(result.getMotDePasse());
         assertEquals(role, result.getRole());
     }
 
@@ -76,7 +77,8 @@ class UtilisateurMapperTest {
 
         assertEquals(requestDTO.getNom(), utilisateur.getNom());
         assertEquals(requestDTO.getEmail(), utilisateur.getEmail());
-        assertEquals(requestDTO.getMotDePasse(), utilisateur.getMotDePasse());
+        // Le mot de passe existant (hash) reste intact : seul le service le change.
+        assertEquals("password123", utilisateur.getMotDePasse());
         assertEquals(role, utilisateur.getRole());
     }
 } 

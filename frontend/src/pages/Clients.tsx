@@ -1,75 +1,18 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
 import { Plus, Search } from "lucide-react";
-import { toast } from "sonner";
-import { useAuth } from "../contexts/AuthContext";
-
-interface Client {
-  id: number;
-  raisonSociale: string;
-  email: string;
-  telephone: string;
-  adresse: string;
-  rc?: string;
-  identiteFiscale?: string;
-  ice?: string;
-  agentName?: string;
-}
+import { clientSchema } from "@/schemas";
+import { usePagedList } from "@/lib/pagedQueries";
+import PaginationBar from "@/components/PaginationBar";
+import QueryError from "@/components/QueryError";
 
 const Clients: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { authToken } = useAuth();
-
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
-
-  useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`${API_URL}/clients`, {
-          method: "GET",
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json",
-          }
-        });
-        if (!response.ok) {
-          throw new Error(`Erreur ${response.status}: Impossible de récupérer les clients`);
-        }
-        const data: Client[] = await response.json();
-        setClients(data);
-      } catch (error) {
-        console.error("Erreur lors de la récupération des clients :", error);
-        toast.error("Erreur lors du chargement des clients");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (!authToken) {
-      // Pas encore hydraté : l'effet sera relancé quand le jeton arrivera.
-      setLoading(false);
-      return;
-    }
-
-    fetchClients();
-  }, [authToken]);
-
-  const filteredClients = clients.filter(client => {
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      client.raisonSociale?.toLowerCase().includes(searchLower) ||
-      client.email?.toLowerCase().includes(searchLower) ||
-      client.telephone?.includes(searchTerm) ||
-      client.adresse?.toLowerCase().includes(searchLower) ||
-      client.identiteFiscale?.toLowerCase().includes(searchLower) ||
-      client.ice?.toLowerCase().includes(searchLower)
-    );
-  });
+  // Recherche et pagination sont faites par le serveur : la liste n'est plus telechargee en entier.
+  const { items: clients, data, setPage, isLoading, isFetching, error, refetch } =
+    usePagedList("/clients", clientSchema, { q: searchTerm });
 
   return (
     <div className="space-y-6">
@@ -90,7 +33,7 @@ const Clients: React.FC = () => {
             <div className="relative w-96">
               <Search className="absolute left-2 top-3 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Rechercher par nom, email, téléphone, adresse, identité fiscale ou ICE..."
+                placeholder="Rechercher par nom, email, téléphone ou ICE..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -99,7 +42,9 @@ const Clients: React.FC = () => {
           </div>
 
           <div className="mt-6 overflow-x-auto">
-            {loading ? (
+            {error && !data ? (
+              <QueryError what="les clients" error={error} onRetry={() => refetch()} />
+            ) : isLoading ? (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
@@ -108,6 +53,7 @@ const Clients: React.FC = () => {
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Nom</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Département</th>
                     <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Email</th>
                     <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Téléphone</th>
                     <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">RC</th>
@@ -117,9 +63,10 @@ const Clients: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {filteredClients.map((client) => (
+                  {clients.map((client) => (
                     <tr key={client.id} className="hover:bg-muted/50">
                       <td className="px-4 py-3 text-sm">{client.raisonSociale}</td>
+                      <td className="px-4 py-3 text-sm">{client.departementNom ?? "—"}</td>
                       <td className="px-4 py-3 text-sm">{client.email}</td>
                       <td className="px-4 py-3 text-sm">{client.telephone}</td>
                       <td className="px-4 py-3 text-sm">{client.rc || "N/A"}</td>
@@ -135,9 +82,9 @@ const Clients: React.FC = () => {
                     </tr>
                   ))}
 
-                  {filteredClients.length === 0 && !loading && (
+                  {clients.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                      <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
                         Aucun client trouvé
                       </td>
                     </tr>
@@ -146,6 +93,8 @@ const Clients: React.FC = () => {
               </table>
             )}
           </div>
+
+          <PaginationBar data={data} onPageChange={setPage} isFetching={isFetching} />
         </div>
       </div>
     </div>

@@ -7,13 +7,15 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";
 
+const ROLE_LABEL = { admin: "Administrateur", manager: "Gestionnaire de département", agent: "Agent" } as const;
+
 const Profile: React.FC = () => {
   const { currentUser } = useAuth();
   
   const [formData, setFormData] = useState({
     name: currentUser?.name || "",
     email: currentUser?.email || "",
-    role: currentUser?.role || "user"
+    role: currentUser?.role || "agent"
   });
   
   const [password, setPassword] = useState({
@@ -81,7 +83,7 @@ const Profile: React.FC = () => {
                 <Label htmlFor="role">Rôle</Label>
                 <Input
                   id="role"
-                  value={formData.role === "admin" ? "Administrateur" : "Utilisateur"}
+                  value={ROLE_LABEL[formData.role]}
                   readOnly
                   disabled
                   className="bg-gray-100"

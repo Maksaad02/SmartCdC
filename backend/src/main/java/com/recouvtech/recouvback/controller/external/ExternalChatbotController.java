@@ -55,12 +55,10 @@ public class ExternalChatbotController {
     public ResponseEntity<ClientResponseDTO> getClientById(
             @PathVariable Long clientId) {
 
-        try {
-            ClientResponseDTO client = clientService.getClientById(clientId);
-            return ResponseEntity.ok(client);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        // Pas de try/catch generique : il transformait un refus d'acces (403) et une
+        // panne (500) en "introuvable" (404), et le chatbot annoncait alors a l'agent
+        // que le client n'existait pas. GlobalExceptionHandler renvoie 404, 403 ou 500.
+        return ResponseEntity.ok(clientService.getClientById(clientId));
     }
 
     /**
@@ -73,15 +71,9 @@ public class ExternalChatbotController {
     public ResponseEntity<List<CreanceResponseDTO>> getClientCreances(
             @PathVariable Long clientId) {
 
-        try {
-            // Verify client exists first
-            clientService.getClientById(clientId);
-
-            List<CreanceResponseDTO> creances = creanceService.getCreancesByClientId(clientId);
-            return ResponseEntity.ok(creances);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        // Verifie d'abord que le client existe et releve du portefeuille de l'appelant.
+        clientService.getClientById(clientId);
+        return ResponseEntity.ok(creanceService.getCreancesByClientId(clientId));
     }
 
     /**
@@ -91,9 +83,12 @@ public class ExternalChatbotController {
      * @return List of all unpaid debts
      */
     @GetMapping("/creances/impayees")
-    public ResponseEntity<List<CreanceResponseDTO>> getUnpaidCreances() {
+    public ResponseEntity<List<CreanceResponseDTO>> getUnpaidCreances(
+            @RequestParam(required = false) Integer limit) {
 
-        List<CreanceResponseDTO> unpaidCreances = creanceService.getAllUnpaidCreances();
+        // Borne (50 par defaut, 200 max) : la reponse est injectee dans le contexte
+        // du LLM ; les plus gros montants sont renvoyes en premier.
+        List<CreanceResponseDTO> unpaidCreances = creanceService.getAllUnpaidCreances(limit);
         return ResponseEntity.ok(unpaidCreances);
     }
 }

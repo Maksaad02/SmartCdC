@@ -23,7 +23,19 @@ export default tseslint.config(
         "warn",
         { allowConstantExport: true },
       ],
-      "@typescript-eslint/no-unused-vars": "off",
+      // Variables et imports inutilises : erreur (tsc les signale aussi). Le prefixe _ marque un
+      // parametre volontairement ignore.
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      // console.log / debug / info ne doivent pas rester dans le code (ils sont retires du build de
+      // production) ; error et warn restent permis pour le diagnostic.
+      "no-console": ["warn", { allow: ["error", "warn"] }],
+      // Les composants shadcn/ui declarent des interfaces vides qui etendent un type React.
+      "@typescript-eslint/no-empty-object-type": ["error", { allowInterfaces: "with-single-extends" }],
     },
+  },
+  {
+    // Fichier de configuration Tailwind : le plugin s'importe par require().
+    files: ["tailwind.config.ts"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
   }
 );

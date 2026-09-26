@@ -1,40 +1,10 @@
-# Ignore everything by default
+# Le contexte de build ne contient que ce qui sert a compiler.
 *
-
-# Allow these specific files/directories
 !src/
 !pom.xml
-!mvnw
-!.mvn/
-!target/*.jar
-!Dockerfile
-!docker-compose.yml
-!application.properties
-!application.yml
 
-# Explicit exclusions (even if allowed above)
-**/target/classes/
-**/target/generated-sources/
-**/target/test-classes/
-**/.git
-**/.gitignore
-**/*.iml
-**/*.log
-**/node_modules/
-**/.idea/
-**/.settings/
-**/.project
-**/.classpath
-**/.vscode/
-**/bin/
-**/build/
-**/out/
-**/logs/
-**/*.md
-**/*.bak
-**/*.swp
-**/docker-compose.override.yml
-**/config/development/
-**/src/test/
-# Env files
+# Jamais dans une image : tests, configuration locale et secrets.
+src/test/
+**/application-local.properties
 .env
+.env.*

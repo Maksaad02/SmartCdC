@@ -1,5 +1,6 @@
 package org.maksaad.recouvchatbot_rag.security;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +24,10 @@ public class SecurityConfig {
     @Value("${recouv.frontend.origin}")
     private String frontendOrigin;
 
+    /** Port d'administration (Prometheus), interne au reseau Docker et jamais publie ; -1 = non configure. */
+    @Value("${management.server.port:-1}")
+    private int managementPort;
+
     public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
     }
@@ -33,7 +38,19 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
+                        // Reponse en flux (SSE) : une fois la requete autorisee, le conteneur la reprend en
+                        // "dispatch ASYNC" pour ecrire la fin de la reponse, SANS contexte de securite
+                        // (session STATELESS). Sans cette regle, ce second passage etait refuse et la
+                        // reponse deja commencee echouait. Un client externe ne peut pas provoquer un
+                        // dispatch ASYNC ou ERROR : ils ne suivent qu'une requete deja autorisee.
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // Sondes de sante (Docker, orchestrateur), sans detail.
+                        .requestMatchers("/actuator/health/**").permitAll()
+                        // Metriques : ouvertes UNIQUEMENT sur le port d'administration interne.
+                        .requestMatchers(request -> managementPort > 0
+                                && request.getLocalPort() == managementPort
+                                && request.getRequestURI().startsWith("/actuator/")).permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e.authenticationEntryPoint((req, res, ex) -> res.sendError(401)))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

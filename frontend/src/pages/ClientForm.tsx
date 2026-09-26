@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -12,13 +13,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
+import { apiFetch, errorMessage } from "@/lib/apiClient";
+import { clientSchema } from "@/schemas";
+import { useDepartements } from "@/lib/departements";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const ClientForm = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const isEditing = !!id;
-  const { authToken, currentUser } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const { currentUser } = useAuth();
 
   const [formData, setFormData] = useState({
     raisonSociale: "",
@@ -29,104 +34,95 @@ const ClientForm = () => {
     identiteFiscale: "",
     ice: ""
   });
+  // Departement du client : choisi par un ADMIN a la creation ; impose par le serveur pour un manager ou
+  // un agent (leur departement) ; non modifiable ensuite (ses creances et reglements le portent aussi).
+  const [departementId, setDepartementId] = useState<string>("");
+  const isAdmin = currentUser?.role === "admin";
+  const departementsQuery = useDepartements(isAdmin && !isEditing);
+  const departementsActifs = (departementsQuery.data ?? []).filter((d) => d.actif);
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+  const clientQuery = useQuery({
+    queryKey: ["/clients", id],
+    queryFn: ({ signal }) => apiFetch(`/clients/${id}`, { schema: clientSchema, signal }),
+    enabled: isEditing,
+  });
+  const loading = isEditing && clientQuery.isLoading;
 
   useEffect(() => {
-    if (isEditing && id) {
-      const fetchClient = async () => {
-        setLoading(true);
-        try {
-          const response = await fetch(`${API_URL}/clients/${id}`, {
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${authToken}`
-            }
-          });
+    const client = clientQuery.data;
+    if (!client) return;
+    setFormData({
+      raisonSociale: client.raisonSociale,
+      email: client.email ?? "",
+      telephone: client.telephone ?? "",
+      registreCommerce: client.rc || "",
+      adresse: client.adresse ?? "",
+      identiteFiscale: client.identiteFiscale || "",
+      ice: client.ice || ""
+    });
+    setDepartementId(client.departementId ? String(client.departementId) : "");
+  }, [clientQuery.data]);
 
-          if (!response.ok) throw new Error("Client non trouvé");
-
-          const client = await response.json();
-          setFormData({
-            raisonSociale: client.raisonSociale,
-            email: client.email,
-            telephone: client.telephone,
-            registreCommerce: client.rc || "",
-            adresse: client.adresse,
-            identiteFiscale: client.identiteFiscale || "",
-            ice: client.ice || ""
-          });
-        } catch (error) {
-          toast.error("Erreur lors du chargement du client");
-          navigate("/clients");
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchClient();
+  useEffect(() => {
+    if (clientQuery.isError) {
+      toast.error("Erreur lors du chargement du client");
+      navigate("/clients");
     }
-  }, [id, isEditing, navigate, authToken]);
+  }, [clientQuery.isError, navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const saveMutation = useMutation({
+    mutationFn: (payload: object) =>
+      apiFetch(isEditing ? `/clients/${id}` : "/clients", {
+        method: isEditing ? "PUT" : "POST",
+        body: payload,
+      }),
+    onSuccess: () => {
+      toast.success(isEditing ? "Client modifié avec succès" : "Client ajouté avec succès");
+      queryClient.invalidateQueries({ queryKey: ["/clients"] });
+      navigate("/clients");
+    },
+    onError: (err) => toast.error(errorMessage(err, "Une erreur est survenue")),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
     if (!formData.raisonSociale || !formData.email || !formData.telephone || !formData.adresse) {
       toast.error("Veuillez remplir tous les champs obligatoires");
       return;
     }
 
-    // Email validation
+    if (isAdmin && !isEditing && !departementId) {
+      toast.error("Choisissez le département du client");
+      return;
+    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       toast.error("Veuillez entrer une adresse email valide");
       return;
     }
 
-    try {
-      const url = isEditing
-        ? `${API_URL}/clients/${id}`
-        : `${API_URL}/clients`;
-
-      const method = isEditing ? "PUT" : "POST";
-
-      const payload = {
-        raisonSociale: formData.raisonSociale,
-        email: formData.email,
-        telephone: formData.telephone,
-        rc: formData.registreCommerce,
-        adresse: formData.adresse,
-        identiteFiscale: formData.identiteFiscale,
-        ice: formData.ice,
-        agentName: currentUser?.name || "Agent" // Add the agent name like in DebtForm
-      };
-
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(errorData || "Erreur lors de l'enregistrement");
-      }
-
-      toast.success(isEditing ? "Client modifié avec succès" : "Client ajouté avec succès");
-      navigate("/clients");
-    } catch (error) {
-      console.error("Error:", error);
-      toast.error(error instanceof Error ? error.message : "Une erreur est survenue");
-    }
+    saveMutation.mutate({
+      raisonSociale: formData.raisonSociale,
+      email: formData.email,
+      telephone: formData.telephone,
+      rc: formData.registreCommerce,
+      adresse: formData.adresse,
+      identiteFiscale: formData.identiteFiscale,
+      ice: formData.ice,
+      // A la creation, le responsable du dossier est l'utilisateur courant (un AGENT y est de toute facon
+      // force par le serveur). A la modification, on ne le change pas : renvoyer son nom ferait du
+      // dernier editeur le nouveau responsable.
+      ...(isEditing ? {} : { agentName: currentUser?.name || undefined }),
+      // Seul un ADMIN designe le departement, a la creation.
+      ...(isAdmin && !isEditing ? { departementId: Number(departementId) } : {}),
+    });
   };
 
   return (
@@ -220,6 +216,20 @@ const ClientForm = () => {
                   />
                 </div>
 
+                {isAdmin && !isEditing && (
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label>Département <span className="text-red-500">*</span></Label>
+                    <Select value={departementId} onValueChange={setDepartementId}>
+                      <SelectTrigger aria-label="Département"><SelectValue placeholder="Choisir un département" /></SelectTrigger>
+                      <SelectContent>
+                        {departementsActifs.map((d) => (
+                          <SelectItem key={d.id} value={String(d.id)}>{d.nom}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="adresse">Adresse <span className="text-red-500">*</span></Label>
                   <Input
@@ -237,7 +247,7 @@ const ClientForm = () => {
                 <Button type="button" variant="outline" onClick={() => navigate("/clients")}>
                   Annuler
                 </Button>
-                <Button type="submit" className="bg-debt-blue hover:bg-debt-lightBlue">
+                <Button type="submit" className="bg-debt-blue hover:bg-debt-lightBlue" disabled={saveMutation.isPending}>
                   {isEditing ? "Modifier" : "Ajouter"} le client
                 </Button>
               </div>

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useParams, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -8,127 +9,73 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { useAuth } from "../contexts/AuthContext";
-//import { apiClient } from "../utils/api";
-import { Debt, Reminder } from "../models/types";
 import DebtFormLoading from "@/components/debt/DebtFormLoading";
 import StatusBadge, { StatusType } from "../components/StatusBadge";
 import { formatDate, formatCurrency } from "../utils/formatters";
-import { ArrowLeft, CalendarIcon, FileText, Edit, Calendar, Building, CreditCard, AlertCircle, AlertTriangle } from "lucide-react";
+import { ArrowLeft, CalendarIcon, Edit, Building, AlertCircle, AlertTriangle } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { apiFetch } from "@/lib/apiClient";
+import { fetchAllPages } from "@/lib/pagedQueries";
+import { creanceSchema, relanceSchema, reglementSchema } from "@/schemas";
+import QueryError from "@/components/QueryError";
 
-interface Payment {
-  id: string;
-  numFacture: string;
-  dateReglement: string;
-  montant: number;
-  modePaiement: string;
-  reference?: string;
-}
+const REMINDER_LABELS: Record<string, { label: string; className: string }> = {
+  EN_ATTENTE: { label: "En attente", className: "bg-gray-500" },
+  ENVOYEE: { label: "Envoyée", className: "bg-orange-500" },
+  EFFECTUEE: { label: "Effectuée", className: "bg-green-500" },
+  ANNULEE: { label: "Annulée", className: "bg-red-500" },
+  ECHEC: { label: "Échec", className: "bg-red-600" },
+  REPORTEE: { label: "Reportée", className: "bg-yellow-600" },
+};
 
 const DebtDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { authToken } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [debt, setDebt] = useState<Debt | null>(null);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [reminders, setReminders] = useState<Reminder[]>([]);
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+  const debtQuery = useQuery({
+    queryKey: ["/creances", id],
+    queryFn: ({ signal }) =>
+      apiFetch(`/creances/${encodeURIComponent(id ?? "")}`, { schema: creanceSchema, signal }),
+    enabled: !!id,
+  });
+  const debt = debtQuery.data ?? null;
+  const numFacture = debt?.numFacture;
 
-  useEffect(() => {
-    const fetchDebtDetails = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`${API_URL}/creances/${id}`, {
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json",
-          },
-        });
+  // Reglements et relances de CETTE creance, filtres par le serveur (le filtre numFacture etait
+  // auparavant ignore : toute la table etait telechargee puis filtree ici).
+  const paymentsQuery = useQuery({
+    queryKey: ["/reglements", "facture", numFacture],
+    queryFn: ({ signal }) =>
+      fetchAllPages("/reglements", reglementSchema, { params: { numFacture }, maxItems: 500, signal }),
+    enabled: !!numFacture,
+  });
+  const remindersQuery = useQuery({
+    queryKey: ["/relances", "facture", numFacture],
+    queryFn: ({ signal }) =>
+      fetchAllPages("/relances", relanceSchema, { params: { numFacture }, maxItems: 500, signal }),
+    enabled: !!numFacture,
+  });
+  const payments = paymentsQuery.data?.items ?? [];
+  const reminders = remindersQuery.data?.items ?? [];
+  const loading = debtQuery.isLoading;
 
-        if (!response.ok) {
-          throw new Error(`Error ${response.status}`);
-        }
-
-        const debtData = await response.json();
-        console.log("Debt data received:", debtData); // Debug log
-        setDebt(debtData);
-
-        // Fetch related payments - using numFacture to match the debt
-        const paymentsResponse = await fetch(`${API_URL}/reglements?numFacture=${debtData.numFacture}`, {
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json",
-          },
-        });
-        const paymentsData = await paymentsResponse.json();
-
-        // Additional filter to ensure we only get payments for this specific debt
-        const filteredPayments = paymentsData.filter(
-          (payment: Payment) => payment.numFacture === debtData.numFacture
-        );
-
-        setPayments(filteredPayments);
-
-        // Fetch related reminders - using both numFacture and debtId to ensure we only get reminders for this debt
-        const remindersResponse = await fetch(`${API_URL}/relances?numFacture=${debtData.numFacture}&debtId=${id}`, {
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json",
-          },
-        });
-        const remindersData = await remindersResponse.json();
-
-        // Additional filter to ensure we only get reminders for this specific debt
-        const filteredReminders = remindersData.filter(
-          (reminder: Reminder) => reminder.numFacture === debtData.numFacture
-        );
-
-        setReminders(filteredReminders);
-
-      } catch (error) {
-        console.error("Error fetching debt details:", error);
-        toast.error("Unable to load debt details");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (id) {
-      fetchDebtDetails();
-    }
-  }, [id, authToken]);
-
-  const calculateDaysLate = (dateEcheance: string | undefined): number => {
+  const calculateDaysLate = (dateEcheance: string | null | undefined): number => {
     if (!dateEcheance) return 0;
-    try {
-      const today = new Date();
-      const dueDate = new Date(dateEcheance);
-      return today > dueDate ? Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
-    } catch (error) {
-      console.error("Error calculating days late:", error);
-      return 0;
-    }
+    const today = new Date();
+    const dueDate = new Date(dateEcheance);
+    return today > dueDate ? Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
   };
 
   const calculatePaymentStats = () => {
-    // Use the debt's actual values instead of calculating from payments
+    // Valeurs de la creance elle-meme (calculees par le serveur), pas une somme des reglements.
     const totalPaid = debt?.montantEncaisse || 0;
     const totalInvoiced = debt?.montantFacture || 0;
     const remaining = debt?.solde || 0;
     const paymentProgress = totalInvoiced > 0 ? Math.min(100, (totalPaid / totalInvoiced) * 100) : 0;
 
-    return {
-      totalPaid,
-      totalInvoiced,
-      remaining,
-      paymentProgress
-    };
+    return { totalPaid, totalInvoiced, remaining, paymentProgress };
   };
 
   if (loading) {
@@ -144,6 +91,10 @@ const DebtDetails: React.FC = () => {
         </Card>
       </div>
     );
+  }
+
+  if (debtQuery.isError && !(debtQuery.error as { status?: number }).status?.toString().startsWith("4")) {
+    return <QueryError what="la créance" error={debtQuery.error} onRetry={() => debtQuery.refetch()} />;
   }
 
   if (!debt) {
@@ -166,7 +117,7 @@ const DebtDetails: React.FC = () => {
     );
   }
 
-  const daysLate = calculateDaysLate(debt.echeance);
+  const daysLate = debt.joursRetard ?? calculateDaysLate(debt.echeance);
   const isOverdue = daysLate > 0;
   const isPenalized = daysLate >= 60;
 
@@ -237,7 +188,7 @@ const DebtDetails: React.FC = () => {
                 <dt className="font-medium text-muted-foreground">Date d'échéance</dt>
                 <dd className="flex items-center">
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {formatDate(debt.echeance)}
+                  {formatDate(debt.echeance ?? undefined)}
                 </dd>
               </div>
               {daysLate > 0 && (
@@ -287,8 +238,8 @@ const DebtDetails: React.FC = () => {
                 {payments.map((payment) => (
                   <div key={payment.id} className="rounded-md border p-4">
                     <div className="flex justify-between items-center mb-2">
-                      <div className="font-medium">{formatDate(payment.dateReglement)}</div>
-                      <div className="text-green-600 font-bold">{formatCurrency(payment.montant)} MAD</div>
+                      <div className="font-medium">{formatDate(payment.dateReglement ?? undefined)}</div>
+                      <div className="text-green-600 font-bold">{formatCurrency(payment.montant ?? 0)} MAD</div>
                     </div>
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <div>Mode: {payment.modePaiement}</div>
@@ -360,19 +311,14 @@ const DebtDetails: React.FC = () => {
                 <div key={reminder.id} className="flex justify-between items-center p-3 border rounded">
                   <div>
                     <p className="font-medium capitalize">{reminder.typeRelance}</p>
-                    <p className="text-sm text-muted-foreground">{formatDate(reminder.dateRelance)}</p>
+                    <p className="text-sm text-muted-foreground">{formatDate(reminder.dateRelance ?? undefined)}</p>
                   </div>
                   <div className="text-right">
                     <Badge className={cn(
-                      "capitalize",
-                      reminder.statutRelance === "en_attente" ? "bg-gray-500" :
-                        reminder.statutRelance === "envoyee" ? "bg-orange-500" :
-                          "bg-green-500",
+                      (reminder.statutRelance && REMINDER_LABELS[reminder.statutRelance]?.className) || "bg-gray-500",
                       "text-white"
                     )}>
-                      {reminder.statutRelance === "en_attente" ? "En attente" :
-                        reminder.statutRelance === "envoyee" ? "Envoyée" :
-                          "Répondue"}
+                      {(reminder.statutRelance && REMINDER_LABELS[reminder.statutRelance]?.label) || "—"}
                     </Badge>
                     {reminder.commentaire && (
                       <p className="text-sm text-muted-foreground mt-1">{reminder.commentaire}</p>

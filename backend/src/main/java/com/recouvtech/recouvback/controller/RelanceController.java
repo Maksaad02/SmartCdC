@@ -3,9 +3,16 @@ package com.recouvtech.recouvback.controller;
 import com.recouvtech.recouvback.dto.RelanceDTO.RelanceRequestDTO;
 import com.recouvtech.recouvback.dto.RelanceDTO.RelanceResponseDTO;
 import com.recouvtech.recouvback.service.RelanceService;
+import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import com.recouvtech.recouvback.entity.enums.StatutRelance;
+import org.springframework.format.annotation.DateTimeFormat;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -20,13 +27,18 @@ public class RelanceController {
     private final RelanceService relanceService;
 
     @PostMapping
-    public RelanceResponseDTO create(@RequestBody RelanceRequestDTO dto) {
+    public RelanceResponseDTO create(@Valid @RequestBody RelanceRequestDTO dto) {
         return relanceService.create(dto);
     }
 
+    /** Liste paginee. Parametres : page, size (max 200), sort, q, statutRelance, numFacture, dateRelance. */
     @GetMapping
-    public List<RelanceResponseDTO> getAll() {
-        return relanceService.getAll();
+    public Page<RelanceResponseDTO> getAll(@RequestParam(required = false) String q,
+                                           @RequestParam(required = false) StatutRelance statutRelance,
+                                           @RequestParam(required = false) String numFacture,
+                                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateRelance,
+                                           Pageable pageable) {
+        return relanceService.list(q, statutRelance, numFacture, dateRelance, pageable);
     }
 
     @GetMapping("/{id}")
@@ -35,10 +47,11 @@ public class RelanceController {
     }
 
     @PutMapping("/{id}")
-    public RelanceResponseDTO update(@PathVariable Long id, @RequestBody RelanceRequestDTO dto) {
+    public RelanceResponseDTO update(@PathVariable Long id, @Valid @RequestBody RelanceRequestDTO dto) {
         return relanceService.update(id, dto);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Long id) {
         relanceService.delete(id);

@@ -1,10 +1,11 @@
 package com.recouvtech.recouvback.service;
 
+import com.recouvtech.recouvback.dao.DepartementRepository;
 import com.recouvtech.recouvback.dao.RoleRepository;
 import com.recouvtech.recouvback.dao.UtilisateurRepository;
 import com.recouvtech.recouvback.dto.UtilisateurDTO.UtilisateurRequestDTO;
 import com.recouvtech.recouvback.dto.UtilisateurDTO.UtilisateurResponseDTO;
-import com.recouvtech.recouvback.entity.Organisation;
+import com.recouvtech.recouvback.entity.Departement;
 import com.recouvtech.recouvback.entity.Role;
 import com.recouvtech.recouvback.entity.Utilisateur;
 import com.recouvtech.recouvback.entity.enums.RoleAgent;
@@ -16,9 +17,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.access.AccessDeniedException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,94 +32,152 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
- * UtilisateurService est la seule voie d'acces a Utilisateur, qui ne porte pas
- * @TenantId (l'authentification doit pouvoir resoudre un compte avant de
- * connaitre l'organisation). Ces tests couvrent donc explicitement le
- * cloisonnement que Hibernate assure ailleurs automatiquement.
+ * UtilisateurService est la seule voie d'acces a Utilisateur, qui ne porte pas le filtre Hibernate de
+ * departement (l'authentification doit pouvoir resoudre un compte avant de connaitre son departement).
+ *
+ * Invariant applique ici : un ADMIN n'appartient a aucun departement ; un MANAGER ou un AGENT
+ * appartient a exactement un departement existant.
  */
 @ExtendWith(MockitoExtension.class)
 class UtilisateurServiceTest {
 
-    @Mock
-    private UtilisateurRepository utilisateurRepository;
-
-    @Mock
-    private RoleRepository roleRepository;
-
-    @Mock
-    private CurrentUser currentUser;
+    @Mock private UtilisateurRepository utilisateurRepository;
+    @Mock private RoleRepository roleRepository;
+    @Mock private DepartementRepository departementRepository;
+    @Mock private CurrentUser currentUser;
+    @Mock private PasswordEncoder passwordEncoder;
+    @Mock private RefreshTokenService refreshTokenService;
 
     @InjectMocks
     private UtilisateurService utilisateurService;
 
-    private static final Long ORG_A = 1L;
-    private static final Long ORG_B = 2L;
+    private static final String HASH_EXISTANT = "$2a$10$hashExistantQuiNeDoitPasEtreEcrase";
+    private static final String HASH_NOUVEAU = "$2a$10$nouveauHashProduitParLEncodeur";
 
-    private Organisation organisationA;
+    private Departement casa;
     private Role roleAgent;
-    private Role roleSuperAdmin;
-    private Utilisateur appelant;
-    private Utilisateur utilisateurOrgA;
+    private Role roleManager;
+    private Role roleAdmin;
+    private Utilisateur agentExistant;
     private UtilisateurRequestDTO requestDTO;
 
     @BeforeEach
     void setUp() {
-        organisationA = new Organisation("Cabinet A");
-        organisationA.setId(ORG_A);
+        casa = new Departement("Casablanca", "CASA");
+        casa.setId(1L);
 
-        roleAgent = new Role();
-        roleAgent.setId(1L);
-        roleAgent.setNom(RoleAgent.AGENT);
+        roleAgent = role(1L, RoleAgent.AGENT);
+        roleManager = role(2L, RoleAgent.MANAGER);
+        roleAdmin = role(3L, RoleAgent.ADMIN);
 
-        roleSuperAdmin = new Role();
-        roleSuperAdmin.setId(2L);
-        roleSuperAdmin.setNom(RoleAgent.SUPER_ADMIN);
-
-        appelant = new Utilisateur();
-        appelant.setIdAgentRecouv(1L);
-        appelant.setEmail("admin@cabinet-a.test");
-        appelant.setOrganisation(organisationA);
-
-        utilisateurOrgA = new Utilisateur();
-        utilisateurOrgA.setIdAgentRecouv(2L);
-        utilisateurOrgA.setNom("John Doe");
-        utilisateurOrgA.setEmail("john@cabinet-a.test");
-        utilisateurOrgA.setMotDePasse("password123");
-        utilisateurOrgA.setRole(roleAgent);
-        utilisateurOrgA.setOrganisation(organisationA);
+        agentExistant = new Utilisateur();
+        agentExistant.setIdAgentRecouv(2L);
+        agentExistant.setNom("John Doe");
+        agentExistant.setEmail("john@entreprise.test");
+        agentExistant.setMotDePasse(HASH_EXISTANT);
+        agentExistant.setRole(roleAgent);
+        agentExistant.setDepartement(casa);
 
         requestDTO = new UtilisateurRequestDTO();
         requestDTO.setNom("Jane Doe");
-        requestDTO.setEmail("jane@cabinet-a.test");
-        requestDTO.setMotDePasse("password456");
+        requestDTO.setEmail("jane@entreprise.test");
+        requestDTO.setMotDePasse("password456-long");
         requestDTO.setRoleId(1L);
+        requestDTO.setDepartementId(1L);
     }
 
+    private static Role role(Long id, RoleAgent nom) {
+        Role r = new Role();
+        r.setId(id);
+        r.setNom(nom);
+        return r;
+    }
+
+    // ------------------------------------------------------------------ creation
+
     @Test
-    void creerRattacheAuNouvelUtilisateurLOrganisationDeLAppelant() {
+    void creerUnAgentLeRattacheAuDepartementDemande() {
         when(utilisateurRepository.existsByEmail(requestDTO.getEmail())).thenReturn(false);
-        when(roleRepository.findById(requestDTO.getRoleId())).thenReturn(Optional.of(roleAgent));
-        when(currentUser.email()).thenReturn(appelant.getEmail());
-        when(utilisateurRepository.findByEmail(appelant.getEmail())).thenReturn(Optional.of(appelant));
+        when(roleRepository.findById(1L)).thenReturn(Optional.of(roleAgent));
+        when(departementRepository.findById(1L)).thenReturn(Optional.of(casa));
         when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UtilisateurResponseDTO result = utilisateurService.create(requestDTO);
 
-        assertNotNull(result);
-        assertEquals(requestDTO.getEmail(), result.getEmail());
-        verify(utilisateurRepository).save(argThat(u ->
-                u.getOrganisation() != null && u.getOrganisation().getId().equals(ORG_A)));
+        assertEquals(1L, result.getDepartementId());
+        verify(utilisateurRepository).save(argThat(u -> u.getDepartement() != null && u.getDepartement().getId().equals(1L)));
     }
 
     @Test
-    void seulUnSuperAdminPeutAttribuerLeRoleSuperAdmin() {
-        requestDTO.setRoleId(2L);
+    void creerUnManagerOuUnAgentSansDepartementEstRefuse() {
+        requestDTO.setDepartementId(null);
         when(utilisateurRepository.existsByEmail(requestDTO.getEmail())).thenReturn(false);
-        when(roleRepository.findById(requestDTO.getRoleId())).thenReturn(Optional.of(roleSuperAdmin));
-        when(currentUser.isSuperAdmin()).thenReturn(false);
+        when(roleRepository.findById(1L)).thenReturn(Optional.of(roleAgent));
 
-        assertThrows(AccessDeniedException.class, () -> utilisateurService.create(requestDTO));
+        assertThrows(IllegalArgumentException.class, () -> utilisateurService.create(requestDTO));
         verify(utilisateurRepository, never()).save(any());
+    }
+
+    @Test
+    void creerUnAdminAvecUnDepartementEstRefuse() {
+        requestDTO.setRoleId(3L);
+        when(utilisateurRepository.existsByEmail(requestDTO.getEmail())).thenReturn(false);
+        when(roleRepository.findById(3L)).thenReturn(Optional.of(roleAdmin));
+
+        assertThrows(IllegalArgumentException.class, () -> utilisateurService.create(requestDTO));
+        verify(utilisateurRepository, never()).save(any());
+    }
+
+    @Test
+    void creerUnAdminNeLeRattacheAAucunDepartement() {
+        requestDTO.setRoleId(3L);
+        requestDTO.setDepartementId(null);
+        when(utilisateurRepository.existsByEmail(requestDTO.getEmail())).thenReturn(false);
+        when(roleRepository.findById(3L)).thenReturn(Optional.of(roleAdmin));
+        when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UtilisateurResponseDTO result = utilisateurService.create(requestDTO);
+
+        assertNull(result.getDepartementId());
+    }
+
+    @Test
+    void creerDansUnDepartementInexistantOuDesactiveEstRefuse() {
+        when(utilisateurRepository.existsByEmail(requestDTO.getEmail())).thenReturn(false);
+        when(roleRepository.findById(1L)).thenReturn(Optional.of(roleAgent));
+        when(departementRepository.findById(1L)).thenReturn(Optional.empty());
+        assertThrows(IllegalArgumentException.class, () -> utilisateurService.create(requestDTO));
+
+        casa.setActif(false);
+        when(departementRepository.findById(1L)).thenReturn(Optional.of(casa));
+        assertThrows(IllegalArgumentException.class, () -> utilisateurService.create(requestDTO));
+        verify(utilisateurRepository, never()).save(any());
+    }
+
+    @Test
+    void creerHacheLeMotDePasseAvantDeLEnregistrer() {
+        when(utilisateurRepository.existsByEmail(requestDTO.getEmail())).thenReturn(false);
+        when(roleRepository.findById(1L)).thenReturn(Optional.of(roleAgent));
+        when(departementRepository.findById(1L)).thenReturn(Optional.of(casa));
+        when(passwordEncoder.encode("password456-long")).thenReturn(HASH_NOUVEAU);
+        when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        utilisateurService.create(requestDTO);
+
+        // Jamais la valeur saisie : c'est le hash qui atteint la base.
+        verify(utilisateurRepository).save(argThat(u ->
+                HASH_NOUVEAU.equals(u.getMotDePasse()) && !"password456-long".equals(u.getMotDePasse())));
+    }
+
+    @Test
+    void creerSansMotDePasseEstRefuse() {
+        requestDTO.setMotDePasse("  ");
+        when(utilisateurRepository.existsByEmail(requestDTO.getEmail())).thenReturn(false);
+        when(roleRepository.findById(1L)).thenReturn(Optional.of(roleAgent));
+
+        assertThrows(IllegalArgumentException.class, () -> utilisateurService.create(requestDTO));
+        verify(utilisateurRepository, never()).save(any());
+        verifyNoInteractions(passwordEncoder);
     }
 
     @Test
@@ -125,74 +188,130 @@ class UtilisateurServiceTest {
         verify(utilisateurRepository, never()).save(any());
     }
 
+    // -------------------------------------------------------------- modification
+
     @Test
-    void getAllPourUnAdminDOrganisationNeVoitQueSonOrganisation() {
-        when(currentUser.isSuperAdmin()).thenReturn(false);
-        when(currentUser.organisationId()).thenReturn(ORG_A);
-        when(utilisateurRepository.findByOrganisation_Id(ORG_A))
-                .thenReturn(List.of(utilisateurOrgA));
+    void modifierSansMotDePasseConserveLeHashExistant() {
+        requestDTO.setMotDePasse(null);
+        when(utilisateurRepository.findById(2L)).thenReturn(Optional.of(agentExistant));
+        when(roleRepository.findById(1L)).thenReturn(Optional.of(roleAgent));
+        when(departementRepository.findById(1L)).thenReturn(Optional.of(casa));
+        when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        List<UtilisateurResponseDTO> result = utilisateurService.getAll();
+        utilisateurService.update(2L, requestDTO);
 
-        assertEquals(1, result.size());
-        verify(utilisateurRepository, never()).findAll();
+        assertEquals(HASH_EXISTANT, agentExistant.getMotDePasse());
+        verifyNoInteractions(passwordEncoder);
     }
 
     @Test
-    void getAllPourUnSuperAdminVoitToutesLesOrganisations() {
-        when(currentUser.isSuperAdmin()).thenReturn(true);
-        when(utilisateurRepository.findAll()).thenReturn(Arrays.asList(utilisateurOrgA));
+    void modifierAvecUnNouveauMotDePasseLeHacheEtRevoqueLesSessions() {
+        when(utilisateurRepository.findById(2L)).thenReturn(Optional.of(agentExistant));
+        when(roleRepository.findById(1L)).thenReturn(Optional.of(roleAgent));
+        when(departementRepository.findById(1L)).thenReturn(Optional.of(casa));
+        when(passwordEncoder.encode("password456-long")).thenReturn(HASH_NOUVEAU);
+        when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        List<UtilisateurResponseDTO> result = utilisateurService.getAll();
+        utilisateurService.update(2L, requestDTO);
 
-        assertEquals(1, result.size());
-        verify(utilisateurRepository, never()).findByOrganisation_Id(any());
+        assertEquals(HASH_NOUVEAU, agentExistant.getMotDePasse());
+        verify(refreshTokenService).revokeAllForUser(2L);
     }
 
     @Test
-    void getByIdDansSaPropreOrganisationFonctionne() {
-        when(currentUser.isSuperAdmin()).thenReturn(false);
-        when(currentUser.organisationId()).thenReturn(ORG_A);
-        when(utilisateurRepository.findByIdAgentRecouvAndOrganisation_Id(2L, ORG_A))
-                .thenReturn(Optional.of(utilisateurOrgA));
+    void modifierSansDepartementConserveLeDepartementActuel() {
+        requestDTO.setDepartementId(null);
+        requestDTO.setMotDePasse(null);
+        when(utilisateurRepository.findById(2L)).thenReturn(Optional.of(agentExistant));
+        when(roleRepository.findById(1L)).thenReturn(Optional.of(roleAgent));
+        when(departementRepository.findById(1L)).thenReturn(Optional.of(casa));
+        when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        UtilisateurResponseDTO result = utilisateurService.getById(2L);
+        UtilisateurResponseDTO result = utilisateurService.update(2L, requestDTO);
 
-        assertNotNull(result);
-        assertEquals(utilisateurOrgA.getIdAgentRecouv(), result.getId());
+        assertEquals(1L, result.getDepartementId());
     }
 
-    /**
-     * Le cas qui compte : un utilisateur d'une autre organisation ne doit pas
-     * etre accessible, meme en connaissant son id.
-     */
-    @Test
-    void getByIdSurUnUtilisateurDUneAutreOrganisationEstIntrouvable() {
-        when(currentUser.isSuperAdmin()).thenReturn(false);
-        when(currentUser.organisationId()).thenReturn(ORG_B);
-        when(utilisateurRepository.findByIdAgentRecouvAndOrganisation_Id(2L, ORG_B))
-                .thenReturn(Optional.empty());
+    // ------------------------------------------------------------ changement de role
 
-        assertThrows(RessourceIntrouvableException.class, () -> utilisateurService.getById(2L));
+    @Test
+    void changerLeRoleAvecUneValeurVideOuInconnueEstRefuse() {
+        assertThrows(IllegalArgumentException.class, () -> utilisateurService.updateRole(2L, " ", null));
+        assertThrows(IllegalArgumentException.class, () -> utilisateurService.updateRole(2L, null, null));
+
+        when(utilisateurRepository.findById(2L)).thenReturn(Optional.of(agentExistant));
+        assertThrows(IllegalArgumentException.class, () -> utilisateurService.updateRole(2L, "PRESIDENT", null));
+        assertThrows(IllegalArgumentException.class, () -> utilisateurService.updateRole(2L, "SUPER_ADMIN", null),
+                "SUPER_ADMIN n'existe plus");
+    }
+
+    @Test
+    void promouvoirUnAgentEnManagerConserveSonDepartement() {
+        when(utilisateurRepository.findById(2L)).thenReturn(Optional.of(agentExistant));
+        when(roleRepository.findByNom(RoleAgent.MANAGER)).thenReturn(Optional.of(roleManager));
+        when(departementRepository.findById(1L)).thenReturn(Optional.of(casa));
+        when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UtilisateurResponseDTO result = utilisateurService.updateRole(2L, "manager", null);
+
+        assertEquals("MANAGER", result.getRole());
+        assertEquals(1L, result.getDepartementId());
+        // Un role qui change ne doit pas survivre dans une session renouvelable.
+        verify(refreshTokenService).revokeAllForUser(2L);
+    }
+
+    @Test
+    void promouvoirEnAdminRetireLeDepartement() {
+        when(utilisateurRepository.findById(2L)).thenReturn(Optional.of(agentExistant));
+        when(roleRepository.findByNom(RoleAgent.ADMIN)).thenReturn(Optional.of(roleAdmin));
+        when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UtilisateurResponseDTO result = utilisateurService.updateRole(2L, "ADMIN", null);
+
+        assertEquals("ADMIN", result.getRole());
+        assertNull(result.getDepartementId(), "un ADMIN voit toute l'entreprise : aucun departement");
+    }
+
+    @Test
+    void retrograderUnAdminSansDepartementEstRefuse() {
+        Utilisateur admin = new Utilisateur();
+        admin.setIdAgentRecouv(5L);
+        admin.setEmail("admin@entreprise.test");
+        admin.setRole(roleAdmin);
+        when(utilisateurRepository.findById(5L)).thenReturn(Optional.of(admin));
+        when(roleRepository.findByNom(RoleAgent.AGENT)).thenReturn(Optional.of(roleAgent));
+
+        assertThrows(IllegalArgumentException.class, () -> utilisateurService.updateRole(5L, "AGENT", null),
+                "un agent doit appartenir a un departement");
+        verify(utilisateurRepository, never()).save(any());
+    }
+
+    // ------------------------------------------------------------------- lecture
+
+    @Test
+    void listerTransmetLesFiltresAuRepository() {
+        when(utilisateurRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(agentExistant)));
+
+        Page<UtilisateurResponseDTO> result = utilisateurService.list(null, RoleAgent.AGENT, 1L, PageRequest.of(0, 20));
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals("Casablanca", result.getContent().get(0).getDepartementNom());
     }
 
     @Test
     void getByIdInexistantRenvoieRessourceIntrouvable() {
-        when(currentUser.isSuperAdmin()).thenReturn(false);
-        when(currentUser.organisationId()).thenReturn(ORG_A);
-        when(utilisateurRepository.findByIdAgentRecouvAndOrganisation_Id(1L, ORG_A))
-                .thenReturn(Optional.empty());
+        when(utilisateurRepository.findById(1L)).thenReturn(Optional.empty());
 
         assertThrows(RessourceIntrouvableException.class, () -> utilisateurService.getById(1L));
     }
 
     @Test
     void deleteDeSonProprePropreCompteEstRefuse() {
-        when(currentUser.isSuperAdmin()).thenReturn(true);
-        when(utilisateurRepository.findById(2L)).thenReturn(Optional.of(utilisateurOrgA));
-        when(currentUser.email()).thenReturn(utilisateurOrgA.getEmail());
+        when(utilisateurRepository.findById(2L)).thenReturn(Optional.of(agentExistant));
+        when(currentUser.email()).thenReturn(agentExistant.getEmail());
 
         assertThrows(IllegalArgumentException.class, () -> utilisateurService.delete(2L));
-        verify(utilisateurRepository, never()).delete(any());
+        verify(utilisateurRepository, never()).delete(any(Utilisateur.class));
     }
 }

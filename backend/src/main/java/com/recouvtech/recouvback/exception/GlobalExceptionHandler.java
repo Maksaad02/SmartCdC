@@ -1,12 +1,19 @@
 package com.recouvtech.recouvback.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -46,6 +53,24 @@ public class GlobalExceptionHandler {
         return reponse(HttpStatus.BAD_REQUEST, e.getMessage());
     }
 
+    /**
+     * Contrainte d'unicite ou de reference violee (ICE, RC, numero de facture deja utilises...) :
+     * conflit avec l'etat actuel des donnees (409), pas erreur interne. Le detail SQL n'est pas
+     * renvoye : il revele la structure de la base.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> integrite(DataIntegrityViolationException e) {
+        log.warn("Contrainte d'intégrité violée : {}", e.getMostSpecificCause().getMessage());
+        return reponse(HttpStatus.CONFLICT,
+                "Cette valeur existe déjà ou est référencée par d'autres données (RC, ICE, identité fiscale, n° de facture...).");
+    }
+
+    /** Corps JSON absent ou mal forme : erreur du client (400), pas du serveur. */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> corpsIllisible(HttpMessageNotReadableException e) {
+        return reponse(HttpStatus.BAD_REQUEST, "Corps de requête invalide");
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, Object>> etatInvalide(IllegalStateException e) {
         log.error("État applicatif invalide", e);
@@ -62,6 +87,31 @@ public class GlobalExceptionHandler {
                         f -> f.getDefaultMessage() != null ? f.getDefaultMessage() : "invalide",
                         (a, b) -> a)));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(corps);
+    }
+
+    /** Parametre d'URL absent ou de mauvais type (ex. statut=XYZ) : erreur du client. */
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class})
+    public ResponseEntity<Map<String, Object>> parametreInvalide(Exception e) {
+        return reponse(HttpStatus.BAD_REQUEST, "Paramètre de requête invalide");
+    }
+
+    /**
+     * Sans ces cas, le filet ci-dessous transformait un chemin inconnu (404), une
+     * methode non permise (405) ou un type de contenu refuse (415) en erreur 500.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> cheminInconnu(NoResourceFoundException e) {
+        return reponse(HttpStatus.NOT_FOUND, "Ressource introuvable");
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, Object>> methodeNonPermise(HttpRequestMethodNotSupportedException e) {
+        return reponse(HttpStatus.METHOD_NOT_ALLOWED, "Méthode non autorisée");
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<Map<String, Object>> typeNonSupporte(HttpMediaTypeNotSupportedException e) {
+        return reponse(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Type de contenu non supporté");
     }
 
     /**

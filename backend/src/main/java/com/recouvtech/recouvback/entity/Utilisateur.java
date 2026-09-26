@@ -7,6 +7,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
@@ -33,17 +34,25 @@ public class Utilisateur implements UserDetails {
     private Role role;
 
     /**
-     * Organisation d'appartenance.
+     * Departement d'appartenance : obligatoire pour un MANAGER ou un AGENT, null pour un ADMIN
+     * (qui voit toute l'entreprise). Invariant verifie par UtilisateurService.
      *
-     * Volontairement SANS @TenantId : l'authentification resout l'utilisateur
-     * par email avant que l'organisation soit connue, donc une entite filtree
-     * rendrait la connexion impossible. Le cloisonnement des utilisateurs est
-     * applique explicitement dans UtilisateurService, sur une surface reduite
-     * et relisible.
+     * Volontairement SANS filtre Hibernate : l'authentification resout l'utilisateur par email
+     * avant que son departement soit connu. Le cloisonnement des utilisateurs est applique
+     * explicitement dans UtilisateurService, sur une surface reduite et relisible.
+     * EAGER : le principal authentifie porte son departement (CurrentUser, filtre transactionnel).
      */
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "organisation_id", nullable = false)
-    private Organisation organisation;
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "departement_id")
+    private Departement departement;
+
+    /** Echecs de connexion consecutifs ; remis a zero apres une connexion reussie. */
+    @Column(name = "failed_attempts", nullable = false)
+    private int failedAttempts = 0;
+
+    /** Compte verrouille jusqu'a cette date apres trop d'echecs (null = non verrouille). */
+    @Column(name = "locked_until")
+    private LocalDateTime lockedUntil;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -64,7 +73,9 @@ public class Utilisateur implements UserDetails {
     public boolean isAccountNonExpired() { return true; }
 
     @Override
-    public boolean isAccountNonLocked() { return true; }
+    public boolean isAccountNonLocked() {
+        return lockedUntil == null || !lockedUntil.isAfter(LocalDateTime.now());
+    }
 
     @Override
     public boolean isCredentialsNonExpired() { return true; }

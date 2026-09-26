@@ -1,7 +1,7 @@
 // src/components/Chatbot.tsx
-import React, { useState, useEffect, useRef } from "react"; // 1. Import useEffect & useRef
-import { Send, MessageCircle, Loader2 } from "lucide-react";
-import { askChatbot } from "../utils/chatbotApi";
+import React, { useState, useEffect, useRef } from "react";
+import { Send, MessageCircle, Loader2, Square } from "lucide-react";
+import { askChatbotStream, ChatbotError } from "../utils/chatbotApi";
 import ReactMarkdown from 'react-markdown';
 
 /**
@@ -18,6 +18,8 @@ const allowedElements = [
 ];
 
 interface Message {
+  // Compteur local plutot que Date.now() : deux messages crees dans la meme
+  // milliseconde partageaient la meme cle React.
   id: number;
   sender: "user" | "bot";
   text: string;
@@ -28,43 +30,55 @@ const Chatbot: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // 2. Create a reference for the bottom of the chat
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const nextId = useRef(0);
+  // Requete en cours : permet le bouton Annuler et l'abandon au demontage.
+  const abortRef = useRef<AbortController | null>(null);
 
-  // 3. Automatically scroll to bottom whenever 'messages' or 'loading' changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  // Fermer le panneau ne masque que l'affichage : la reponse en cours est
+  // conservee. En revanche, on abandonne l'appel si le composant disparait.
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  const handleCancel = () => abortRef.current?.abort();
+
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
-    const userMessage: Message = { id: Date.now(), sender: "user", text: input };
+    const userMessage: Message = { id: nextId.current++, sender: "user", text: input };
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setLoading(true);
-    setError(null);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    // Le message du bot est cree au premier morceau recu, puis complete au fil de l'eau.
+    const botId = nextId.current++;
+    let botCreated = false;
+    const appendToBot = (text: string) => {
+      if (!botCreated) {
+        botCreated = true;
+        setMessages(prev => [...prev, { id: botId, sender: "bot", text }]);
+      } else {
+        setMessages(prev => prev.map(m => (m.id === botId ? { ...m, text: m.text + text } : m)));
+      }
+    };
 
     try {
-      const botResponse = await askChatbot(userMessage.text);
-      const botMessage: Message = {
-        id: Date.now() + 1,
-        sender: "bot",
-        text: botResponse
-      };
-      setMessages(prev => [...prev, botMessage]);
+      await askChatbotStream(userMessage.text, { signal: controller.signal, onDelta: appendToBot });
+      if (!botCreated) appendToBot("(réponse vide)");
     } catch (err) {
+      const cancelled = err instanceof ChatbotError && err.kind === "cancelled";
       const errorMessage = err instanceof Error ? err.message : "Une erreur est survenue";
-      setError(errorMessage);
-      const botMessage: Message = {
-        id: Date.now() + 1,
-        sender: "bot",
-        text: `❌ ${errorMessage}`
-      };
-      setMessages(prev => [...prev, botMessage]);
+      // Ce qui a deja ete recu reste affiche ; l'erreur ou l'annulation s'ajoute a la suite.
+      appendToBot(`${botCreated ? "\n\n" : ""}${cancelled ? "⏹ Réponse annulée." : `❌ ${errorMessage}`}`);
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       setLoading(false);
     }
   };
@@ -122,13 +136,19 @@ const Chatbot: React.FC = () => {
                 <div className="bg-white border border-gray-200 p-3 rounded-lg rounded-bl-none shadow-sm">
                   <div className="flex items-center space-x-2 text-gray-500">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-sm">Le bot réfléchit...</span>
+                    <span className="text-sm">{messages[messages.length - 1]?.sender === "user" ? "Le bot réfléchit..." : "Réponse en cours..."}</span>
+                    <button
+                      onClick={handleCancel}
+                      className="ml-2 flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 underline"
+                      aria-label="Annuler la requête"
+                    >
+                      <Square className="w-3 h-3" /> Annuler
+                    </button>
                   </div>
                 </div>
               </div>
             )}
             
-            {/* 4. Invisible div that the view scrolls to */}
             <div ref={messagesEndRef} />
           </div>
 

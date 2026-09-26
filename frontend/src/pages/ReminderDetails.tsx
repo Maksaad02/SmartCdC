@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/utils/formatters";
-import { ArrowLeft, Mail, Phone, FileText, Building, Calendar, Trash2 } from "lucide-react";
-import { Reminder } from "@/models/types";
+import { ArrowLeft, Mail, Phone, FileText, Building, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import StatusBadge, { StatusType } from "@/components/StatusBadge";
@@ -20,101 +20,67 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { apiFetch, errorMessage } from "@/lib/apiClient";
+import { creanceSchema, relanceSchema } from "@/schemas";
+import { REMINDER_STATUS_LABELS, REMINDER_TYPE_LABELS } from "@/lib/labels";
+import QueryError from "@/components/QueryError";
+
+const typeIcon = (type: string | null | undefined) => {
+  switch (type) {
+    case "TELEPHONE":
+      return <Phone className="h-5 w-5" />;
+    case "COURRIER":
+      return <FileText className="h-5 w-5" />;
+    default:
+      return <Mail className="h-5 w-5" />;
+  }
+};
 
 const ReminderDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [reminder, setReminder] = useState<Reminder | null>(null);
-  const [loading, setLoading] = useState(true);
-  const { authToken, currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const { currentUser } = useAuth();
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+  const reminderQuery = useQuery({
+    queryKey: ["/relances", id],
+    queryFn: ({ signal }) => apiFetch(`/relances/${id}`, { schema: relanceSchema, signal }),
+    enabled: !!id,
+  });
+  const reminder = reminderQuery.data ?? null;
 
-  useEffect(() => {
-    const fetchReminderDetails = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`${API_URL}/relances/${id}`, {
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json",
-          },
-        });
+  const debtQuery = useQuery({
+    queryKey: ["/creances", reminder?.numFacture],
+    queryFn: ({ signal }) =>
+      apiFetch(`/creances/${encodeURIComponent(reminder?.numFacture ?? "")}`, { schema: creanceSchema, signal }),
+    enabled: !!reminder?.numFacture,
+  });
+  const debt = debtQuery.data ?? null;
 
-        if (!response.ok) {
-          throw new Error(`Error ${response.status}`);
-        }
-
-        const data = await response.json();
-        setReminder(data);
-      } catch (error) {
-        console.error("Error fetching reminder details:", error);
-        toast.error("Unable to load reminder details");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (id) {
-      fetchReminderDetails();
-    }
-  }, [id, authToken]);
-
-  const getReminderTypeIcon = (type: string) => {
-    switch (type) {
-      case "email":
-        return <Mail className="h-5 w-5" />;
-      case "telephone":
-        return <Phone className="h-5 w-5" />;
-      case "courrier":
-        return <FileText className="h-5 w-5" />;
-      default:
-        return <Mail className="h-5 w-5" />;
-    }
-  };
-
-  const getTypeStyle = (type: string) => {
-    switch (type) {
-      case "email":
-        return "bg-blue-100 text-blue-800";
-      case "telephone":
-        return "bg-orange-100 text-orange-800";
-      case "courrier":
-        return "bg-purple-100 text-purple-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const handleDelete = async () => {
-    try {
-      const response = await fetch(`${API_URL}/relances/${id}`, {
-        method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${authToken}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}`);
-      }
-
+  const deleteMutation = useMutation({
+    mutationFn: () => apiFetch(`/relances/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
       toast.success("Relance supprimée avec succès");
+      queryClient.invalidateQueries({ queryKey: ["/relances"] });
       navigate("/reminders");
-    } catch (error) {
-      console.error("Error deleting reminder:", error);
-      toast.error("Impossible de supprimer la relance");
-    }
-  };
+    },
+    onError: (err) => toast.error(errorMessage(err, "Impossible de supprimer la relance")),
+  });
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-96">Loading...</div>;
+  if (reminderQuery.isLoading) {
+    return <div className="flex items-center justify-center h-96">Chargement…</div>;
+  }
+
+  if (reminderQuery.isError) {
+    return <QueryError what="la relance" error={reminderQuery.error} onRetry={() => reminderQuery.refetch()} />;
   }
 
   if (!reminder) {
-    return <div className="text-center">Reminder not found</div>;
+    return <div className="text-center">Relance introuvable</div>;
   }
+
+  const type = reminder.typeRelance ? REMINDER_TYPE_LABELS[reminder.typeRelance] : undefined;
+  const status = reminder.statutRelance ? REMINDER_STATUS_LABELS[reminder.statutRelance] : undefined;
 
   return (
     <div className="space-y-6">
@@ -129,8 +95,9 @@ const ReminderDetails: React.FC = () => {
           <h1 className="text-2xl font-bold tracking-tight">Détails de la relance</h1>
         </div>
         <div className="flex items-center gap-2">
-          <StatusBadge status={reminder.statutRelance.toUpperCase() as StatusType} />
-          {currentUser?.role === 'admin' && (
+          <Badge className={status?.className ?? "bg-gray-100 text-gray-800"}>{status?.label ?? "-"}</Badge>
+          {/* Masque pour les non-ADMIN : le serveur refuse la suppression (403) de toute facon. */}
+          {currentUser?.role === "admin" && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm">
@@ -147,7 +114,7 @@ const ReminderDetails: React.FC = () => {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Annuler</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+                  <AlertDialogAction onClick={() => deleteMutation.mutate()} className="bg-red-600 hover:bg-red-700">
                     Supprimer
                   </AlertDialogAction>
                 </AlertDialogFooter>
@@ -161,8 +128,8 @@ const ReminderDetails: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              {getReminderTypeIcon(reminder.typeRelance)}
-              Reminder Information
+              {typeIcon(reminder.typeRelance)}
+              Informations de la relance
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -170,24 +137,24 @@ const ReminderDetails: React.FC = () => {
               <div>
                 <dt className="text-sm text-muted-foreground">Type</dt>
                 <dd>
-                  <Badge className={getTypeStyle(reminder.typeRelance)}>
-                    {reminder.typeRelance}
+                  <Badge className={type?.className ?? "bg-gray-100 text-gray-800"}>
+                    {type?.label ?? reminder.typeRelance ?? "-"}
                   </Badge>
                 </dd>
               </div>
               <div>
-                <dt className="text-sm text-muted-foreground">Status</dt>
+                <dt className="text-sm text-muted-foreground">Statut</dt>
                 <dd>
-                  <StatusBadge status={reminder.statutRelance.toUpperCase() as StatusType} />
+                  <Badge className={status?.className ?? "bg-gray-100 text-gray-800"}>{status?.label ?? "-"}</Badge>
                 </dd>
               </div>
               <div>
-                <dt className="text-sm text-muted-foreground">Reminder Date</dt>
-                <dd>{formatDate(reminder.dateRelance)}</dd>
+                <dt className="text-sm text-muted-foreground">Date de relance</dt>
+                <dd>{formatDate(reminder.dateRelance ?? undefined)}</dd>
               </div>
               {reminder.commentaire && (
                 <div>
-                  <dt className="text-sm text-muted-foreground">Comments</dt>
+                  <dt className="text-sm text-muted-foreground">Commentaire</dt>
                   <dd className="whitespace-pre-wrap">{reminder.commentaire}</dd>
                 </div>
               )}
@@ -199,39 +166,39 @@ const ReminderDetails: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building className="h-5 w-5" />
-              Related Debt Information
+              Créance concernée
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {reminder.creance ? (
+            {debt ? (
               <dl className="space-y-4">
                 <div>
-                  <dt className="text-sm text-muted-foreground">Invoice Number</dt>
-                  <dd className="text-lg font-medium">{reminder.numFacture}</dd>
+                  <dt className="text-sm text-muted-foreground">N° de facture</dt>
+                  <dd className="text-lg font-medium">
+                    <Link to={`/debts/${debt.numFacture}/details`} className="text-primary hover:underline">
+                      {debt.numFacture}
+                    </Link>
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-sm text-muted-foreground">Client</dt>
-                  <dd>{reminder.creance.clientName || "Client inconnu"}</dd>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <dt className="text-sm text-muted-foreground">Issue Date</dt>
-                    <dd>{formatDate(reminder.creance.dateEmission)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm text-muted-foreground">Due Date</dt>
-                    <dd>{formatDate(reminder.creance.echeance)}</dd>
-                  </div>
+                  <dd>{debt.clientName || "Client inconnu"}</dd>
                 </div>
                 <div>
-                  <dt className="text-sm text-muted-foreground">Status</dt>
+                  <dt className="text-sm text-muted-foreground">Échéance</dt>
+                  <dd>{formatDate(debt.echeance ?? undefined)}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-muted-foreground">Statut de la créance</dt>
                   <dd>
-                    <StatusBadge status={reminder.creance.statut.toUpperCase() as StatusType} />
+                    <StatusBadge status={debt.statut as StatusType} />
                   </dd>
                 </div>
               </dl>
+            ) : debtQuery.isLoading ? (
+              <p className="text-muted-foreground">Chargement…</p>
             ) : (
-              <p className="text-muted-foreground">No related debt information available</p>
+              <p className="text-muted-foreground">Informations de créance indisponibles</p>
             )}
           </CardContent>
         </Card>
@@ -240,4 +207,4 @@ const ReminderDetails: React.FC = () => {
   );
 };
 
-export default ReminderDetails; 
+export default ReminderDetails;

@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { formatDate, formatCurrency } from "@/utils/formatters";
 import { ArrowLeft, Building, Mail, Phone, MapPin, FileText, CreditCard, Trash2, PenSquare } from "lucide-react";
-import { Client, Debt } from "@/models/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import StatusBadge, { StatusType } from "@/components/StatusBadge";
@@ -21,16 +21,33 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+import { apiFetch, errorMessage } from "@/lib/apiClient";
+import { fetchAllPages } from "@/lib/pagedQueries";
+import { clientSchema, creanceSchema } from "@/schemas";
+import QueryError from "@/components/QueryError";
 
 const ClientDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [client, setClient] = useState<Client | null>(null);
-  const [debts, setDebts] = useState<Debt[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { authToken, currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const { currentUser } = useAuth();
+
+  const clientQuery = useQuery({
+    queryKey: ["/clients", id],
+    queryFn: ({ signal }) => apiFetch(`/clients/${id}`, { schema: clientSchema, signal }),
+    enabled: !!id,
+  });
+  const client = clientQuery.data ?? null;
+
+  // Creances de CE client, filtrees par le serveur (par identifiant, et non plus en telechargeant
+  // toutes les creances pour comparer les noms dans le navigateur).
+  const debtsQuery = useQuery({
+    queryKey: ["/creances", "client", id],
+    queryFn: ({ signal }) =>
+      fetchAllPages("/creances", creanceSchema, { params: { clientId: id }, maxItems: 1000, signal }),
+    enabled: !!id,
+  });
+  const debts = debtsQuery.data?.items ?? [];
 
   const generatePdf = async () => {
     const input = document.getElementById("client-details-pdf");
@@ -46,7 +63,6 @@ const ClientDetails: React.FC = () => {
 
       const pdf = new jsPDF("p", "mm", "a4");
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
       const scale = pdfWidth / canvas.width;
       const scaledHeight = canvas.height * scale;
 
@@ -60,91 +76,32 @@ const ClientDetails: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    const fetchClientDetails = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`${API_URL}/clients/${id}`, {
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json",
-          },
-        });
+  const calculateTotalDebt = () => debts.reduce((total, debt) => total + debt.solde, 0);
 
-        if (!response.ok) {
-          throw new Error(`Error ${response.status}`);
-        }
+  const calculateOverdueDebt = () =>
+    debts.filter(debt => debt.joursRetard > 0).reduce((total, debt) => total + debt.solde, 0);
 
-        const clientData = await response.json();
-        setClient(clientData);
-
-        // Fetch client's debts
-        const debtsResponse = await fetch(`${API_URL}/creances`, {
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json",
-          },
-        });
-        const allDebts = await debtsResponse.json();
-
-        // Filter debts to only include those belonging to this client
-        const clientDebts = allDebts.filter((debt: Debt) =>
-          debt.clientName === clientData.raisonSociale
-        );
-
-        setDebts(clientDebts);
-      } catch (error) {
-        console.error("Error fetching client details:", error);
-        toast.error("Unable to load client details");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (id) {
-      fetchClientDetails();
-    }
-  }, [id, authToken]);
-
-  const calculateTotalDebt = () => {
-    return debts.reduce((total, debt) => total + debt.solde, 0);
-  };
-
-  const calculateOverdueDebt = () => {
-    const today = new Date();
-    return debts
-      .filter(debt => new Date(debt.echeance) < today)
-      .reduce((total, debt) => total + debt.solde, 0);
-  };
-
-  const handleDelete = async () => {
-    try {
-      const response = await fetch(`${API_URL}/clients/${id}`, {
-        method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${authToken}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}`);
-      }
-
+  const deleteMutation = useMutation({
+    mutationFn: () => apiFetch(`/clients/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
       toast.success("Client supprimé avec succès");
+      queryClient.invalidateQueries({ queryKey: ["/clients"] });
       navigate("/clients");
-    } catch (error) {
-      console.error("Error deleting client:", error);
-      toast.error("Impossible de supprimer le client");
-    }
-  };
+    },
+    onError: (err) => toast.error(errorMessage(err, "Impossible de supprimer le client")),
+  });
+  const handleDelete = () => deleteMutation.mutate();
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-96">Loading...</div>;
+  if (clientQuery.isLoading) {
+    return <div className="flex items-center justify-center h-96">Chargement…</div>;
+  }
+
+  if (clientQuery.isError) {
+    return <QueryError what="le client" error={clientQuery.error} onRetry={() => clientQuery.refetch()} />;
   }
 
   if (!client) {
-    return <div className="text-center">Client not found</div>;
+    return <div className="text-center">Client introuvable</div>;
   }
 
   return (
@@ -291,13 +248,13 @@ const ClientDetails: React.FC = () => {
                 </thead>
                 <tbody className="divide-y">
                   {debts.map((debt) => (
-                    <tr key={debt.id} className="hover:bg-muted/50">
+                    <tr key={debt.numFacture} className="hover:bg-muted/50">
                       <td className="py-3 px-4">
-                        <Link to={`/debts/${debt.id}`} className="text-primary hover:underline">
+                        <Link to={`/debts/${debt.numFacture}/details`} className="text-primary hover:underline">
                           {debt.numFacture}
                         </Link>
                       </td>
-                      <td className="py-3 px-4">{formatDate(debt.echeance)}</td>
+                      <td className="py-3 px-4">{formatDate(debt.echeance ?? undefined)}</td>
                       <td className="py-3 px-4 text-right">{formatCurrency(debt.montantFacture)}</td>
                       <td className="py-3 px-4 text-right">{formatCurrency(debt.solde)}</td>
                       <td className="py-3 px-4">

@@ -1,167 +1,73 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useParams, Link } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { formatDate, formatCurrency } from "@/utils/formatters";
-import { ArrowLeft, CreditCard, Building, Receipt, Calendar, FileText, Download, Edit } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { ArrowLeft, CreditCard, Building, Calendar, Edit } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { apiFetch, errorMessage } from "@/lib/apiClient";
+import { creanceSchema, reglementSchema } from "@/schemas";
+import QueryError from "@/components/QueryError";
 
-interface Payment {
-  id: string;
-  numFacture: string;
-  montant: number;
-  dateReglement: string;
-  modePaiement: string;
-  reference?: string;
-  statut: "EFFECTUE" | "NON_EFFECTUE";
-  debt?: {
-    numFacture: string;
-    clientName: string;
-    montantFacture: number;
-    solde: number;
-    dateEmission: string;
-    echeance: string;
-  };
-}
+const METHODS: Record<string, { label: string; className: string }> = {
+  VIREMENT: { label: "Virement", className: "bg-blue-100 text-blue-800" },
+  CHEQUE: { label: "Chèque", className: "bg-purple-100 text-purple-800" },
+  CARTE_BANCAIRE: { label: "Carte bancaire", className: "bg-green-100 text-green-800" },
+  ESPECES: { label: "Espèces", className: "bg-yellow-100 text-yellow-800" },
+  TRAITE: { label: "Traite", className: "bg-gray-100 text-gray-800" },
+};
 
 const PaymentDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const [payment, setPayment] = useState<Payment | null>(null);
-  const [loading, setLoading] = useState(true);
-  const { authToken } = useAuth();
+  const queryClient = useQueryClient();
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+  const paymentQuery = useQuery({
+    queryKey: ["/reglements", id],
+    queryFn: ({ signal }) => apiFetch(`/reglements/${id}`, { schema: reglementSchema, signal }),
+    enabled: !!id,
+  });
+  const payment = paymentQuery.data ?? null;
 
-  useEffect(() => {
-    const fetchPaymentDetails = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`${API_URL}/reglements/${id}`, {
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json",
-          },
-        });
+  // La creance concernee : l'API des reglements ne la joint pas, on la charge a part.
+  const debtQuery = useQuery({
+    queryKey: ["/creances", payment?.numFacture],
+    queryFn: ({ signal }) =>
+      apiFetch(`/creances/${encodeURIComponent(payment?.numFacture ?? "")}`, { schema: creanceSchema, signal }),
+    enabled: !!payment?.numFacture,
+  });
+  const debt = debtQuery.data ?? null;
 
-        if (!response.ok) {
-          throw new Error(`Error ${response.status}`);
-        }
-
-        const data = await response.json();
-        setPayment(data);
-      } catch (error) {
-        console.error("Error fetching payment details:", error);
-        toast.error("Unable to load payment details");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (id) {
-      fetchPaymentDetails();
-    }
-  }, [id, authToken]);
-
-  const getPaymentMethodIcon = (method: string) => {
-    switch (method.toLowerCase()) {
-      case "virement":
-        return <Receipt className="h-5 w-5" />;
-      case "cheque":
-        return <Receipt className="h-5 w-5" />;
-      case "carte":
-        return <CreditCard className="h-5 w-5" />;
-      case "especes":
-        return <CreditCard className="h-5 w-5" />;
-      default:
-        return <CreditCard className="h-5 w-5" />;
-    }
-  };
-
-  const getPaymentMethodStyle = (method: string) => {
-    switch (method.toLowerCase()) {
-      case "virement":
-        return "bg-blue-100 text-blue-800";
-      case "cheque":
-        return "bg-purple-100 text-purple-800";
-      case "carte":
-        return "bg-green-100 text-green-800";
-      case "especes":
-        return "bg-yellow-100 text-yellow-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const handleDownloadReceipt = async () => {
-    try {
-      const response = await fetch(`${API_URL}/reglements/${id}/receipt`, {
-        headers: {
-          "Authorization": `Bearer ${authToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to download receipt");
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `receipt-${payment?.reference || id}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error("Error downloading receipt:", error);
-      toast.error("Unable to download receipt");
-    }
-  };
-
-  const handleToggleStatus = async () => {
-    if (!payment) return;
-
-    const newStatus = payment.statut === "EFFECTUE" ? "NON_EFFECTUE" : "EFFECTUE";
-    console.log("Attempting to update status to:", newStatus); // Debug log
-
-    try {
-      const response = await fetch(`http://localhost:8080/api/reglements/${id}/status`, {
-        method: "PATCH",
-        headers: {
-          "Authorization": `Bearer ${authToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newStatus)  // Send just the status string as the backend expects
-      });
-
-      console.log("Response status:", response.status); // Debug log
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.error("Error response:", errorData); // Debug log
-        throw new Error(`Error ${response.status}: ${errorData}`);
-      }
-
-      const updatedPayment = await response.json();
-      console.log("Updated payment:", updatedPayment); // Debug log
-      setPayment(updatedPayment);
+  // Le PATCH attend le statut brut en corps JSON ("EFFECTUE"), comme le declare le controller.
+  const statusMutation = useMutation({
+    mutationFn: (newStatus: "EFFECTUE" | "NON_EFFECTUE") =>
+      apiFetch(`/reglements/${id}/status`, { method: "PATCH", body: newStatus, schema: reglementSchema }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["/reglements", id], updated);
+      // Le statut d'un reglement change le montant encaisse et le statut de la creance.
+      queryClient.invalidateQueries({ queryKey: ["/creances"] });
+      queryClient.invalidateQueries({ queryKey: ["/reglements"] });
+      queryClient.invalidateQueries({ queryKey: ["/dashboard/stats"] });
       toast.success("Statut du paiement mis à jour avec succès");
-    } catch (error) {
-      console.error("Error updating payment status:", error);
-      toast.error("Impossible de mettre à jour le statut du paiement");
-    }
-  };
+    },
+    onError: (err) => toast.error(errorMessage(err, "Impossible de mettre à jour le statut du paiement")),
+  });
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-96">Loading...</div>;
+  if (paymentQuery.isLoading) {
+    return <div className="flex items-center justify-center h-96">Chargement…</div>;
+  }
+
+  if (paymentQuery.isError) {
+    return <QueryError what="le règlement" error={paymentQuery.error} onRetry={() => paymentQuery.refetch()} />;
   }
 
   if (!payment) {
-    return <div className="text-center">Payment not found</div>;
+    return <div className="text-center">Règlement introuvable</div>;
   }
+
+  const method = payment.modePaiement ? METHODS[payment.modePaiement] : undefined;
+  const newStatus = payment.statut === "EFFECTUE" ? "NON_EFFECTUE" : "EFFECTUE";
 
   return (
     <div className="space-y-6">
@@ -170,15 +76,17 @@ const PaymentDetails: React.FC = () => {
           <Link to="/payments">
             <Button variant="outline">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
+              Retour
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold tracking-tight">Payment Details</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Détails du règlement</h1>
         </div>
-        <Button onClick={handleDownloadReceipt}>
-          <Download className="h-4 w-4 mr-2" />
-          Download Receipt
-        </Button>
+        <Link to={`/payments/${id}`}>
+          <Button variant="outline" size="sm">
+            <Edit className="h-4 w-4 mr-2" />
+            Modifier
+          </Button>
+        </Link>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -186,33 +94,25 @@ const PaymentDetails: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CreditCard className="h-5 w-5" />
-              Payment Information
+              Informations du règlement
             </CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="space-y-4">
               <div>
-                <dt className="text-sm text-muted-foreground">Amount</dt>
-                <dd className="text-2xl font-bold">{formatCurrency(payment.montant)} MAD</dd>
+                <dt className="text-sm text-muted-foreground">Montant</dt>
+                <dd className="text-2xl font-bold">{formatCurrency(payment.montant ?? 0)} MAD</dd>
               </div>
               <div>
-                <dt className="text-sm text-muted-foreground">Payment Method</dt>
+                <dt className="text-sm text-muted-foreground">Mode de paiement</dt>
                 <dd>
-                  <Badge className={getPaymentMethodStyle(payment.modePaiement)}>
-                    {payment.modePaiement === "virement"
-                      ? "Virement"
-                      : payment.modePaiement === "cheque"
-                        ? "Chèque"
-                        : payment.modePaiement === "carte"
-                          ? "Carte"
-                          : payment.modePaiement === "especes"
-                            ? "Espèces"
-                            : payment.modePaiement}
+                  <Badge className={method?.className ?? "bg-gray-100 text-gray-800"}>
+                    {method?.label ?? payment.modePaiement ?? "-"}
                   </Badge>
                 </dd>
               </div>
               <div>
-                <dt className="text-sm text-muted-foreground">Status</dt>
+                <dt className="text-sm text-muted-foreground">Statut</dt>
                 <dd className="flex items-center gap-2">
                   <Badge className={payment.statut === "EFFECTUE" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
                     {payment.statut === "EFFECTUE" ? "Effectué" : "Non effectué"}
@@ -220,7 +120,8 @@ const PaymentDetails: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleToggleStatus}
+                    disabled={statusMutation.isPending}
+                    onClick={() => statusMutation.mutate(newStatus)}
                     className="ml-2"
                   >
                     {payment.statut === "EFFECTUE" ? "Marquer comme non effectué" : "Marquer comme effectué"}
@@ -228,15 +129,15 @@ const PaymentDetails: React.FC = () => {
                 </dd>
               </div>
               <div>
-                <dt className="text-sm text-muted-foreground">Payment Date</dt>
+                <dt className="text-sm text-muted-foreground">Date de règlement</dt>
                 <dd className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
-                  {formatDate(payment.dateReglement)}
+                  {formatDate(payment.dateReglement ?? undefined)}
                 </dd>
               </div>
               {payment.reference && (
                 <div>
-                  <dt className="text-sm text-muted-foreground">Reference</dt>
+                  <dt className="text-sm text-muted-foreground">Référence</dt>
                   <dd>{payment.reference}</dd>
                 </div>
               )}
@@ -248,49 +149,43 @@ const PaymentDetails: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building className="h-5 w-5" />
-              Invoice Information
+              Facture concernée
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {payment.debt ? (
+            {debt ? (
               <dl className="space-y-4">
                 <div>
-                  <dt className="text-sm text-muted-foreground">Invoice Number</dt>
+                  <dt className="text-sm text-muted-foreground">N° de facture</dt>
                   <dd className="text-lg font-medium">
-                    <Link to={`/debts/${payment.numFacture}`} className="text-primary hover:underline">
-                      {payment.debt.numFacture}
+                    <Link to={`/debts/${debt.numFacture}/details`} className="text-primary hover:underline">
+                      {debt.numFacture}
                     </Link>
                   </dd>
                 </div>
                 <div>
                   <dt className="text-sm text-muted-foreground">Client</dt>
-                  <dd className="text-primary">
-                    {payment.debt.clientName || "Client inconnu"}
-                  </dd>
+                  <dd className="text-primary">{debt.clientName || "Client inconnu"}</dd>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <dt className="text-sm text-muted-foreground">Invoice Amount</dt>
-                    <dd>{formatCurrency(payment.debt.montantFacture)} MAD</dd>
+                    <dt className="text-sm text-muted-foreground">Montant facturé</dt>
+                    <dd>{formatCurrency(debt.montantFacture)} MAD</dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-muted-foreground">Remaining Balance</dt>
-                    <dd>{formatCurrency(payment.debt.solde)} MAD</dd>
+                    <dt className="text-sm text-muted-foreground">Solde restant</dt>
+                    <dd>{formatCurrency(debt.solde)} MAD</dd>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <dt className="text-sm text-muted-foreground">Issue Date</dt>
-                    <dd>{formatDate(payment.debt.dateEmission)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm text-muted-foreground">Due Date</dt>
-                    <dd>{formatDate(payment.debt.echeance)}</dd>
-                  </div>
+                <div>
+                  <dt className="text-sm text-muted-foreground">Échéance</dt>
+                  <dd>{formatDate(debt.echeance ?? undefined)}</dd>
                 </div>
               </dl>
+            ) : debtQuery.isLoading ? (
+              <p className="text-muted-foreground">Chargement…</p>
             ) : (
-              <p className="text-muted-foreground">No invoice information available</p>
+              <p className="text-muted-foreground">Informations de facture indisponibles</p>
             )}
           </CardContent>
         </Card>
@@ -299,4 +194,4 @@ const PaymentDetails: React.FC = () => {
   );
 };
 
-export default PaymentDetails; 
+export default PaymentDetails;

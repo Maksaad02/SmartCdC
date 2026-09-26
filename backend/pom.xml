@@ -8,20 +8,20 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.4.5</version>
+        <version>3.5.8</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
     <groupId>com.RecouvTech</groupId>
     <artifactId>RecouvBack</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>1.0.0</version>
     <name>RecouvBack</name>
     <description>RecouvBack</description>
 
     <properties>
         <java.version>21</java.version>
         <!-- version pour JJWT -->
-        <jjwt.version>0.11.5</jjwt.version>
+        <jjwt.version>0.12.6</jjwt.version>
     </properties>
 
     <dependencies>
@@ -59,7 +59,6 @@
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
-            <version>8.2.0</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>
@@ -73,10 +72,45 @@
             <scope>test</scope>
         </dependency>
 
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+        <!-- Cache borne en memoire : compteurs du limiteur de connexions -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <!-- Spring Security -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Vrai MySQL pour valider les migrations Flyway (Docker requis) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>mysql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <!-- JJWT : API + implementations + Jackson pour le parsing JSON -->
@@ -116,6 +150,65 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.13</version>
+                <executions>
+                    <execution>
+                        <goals><goal>prepare-agent</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals><goal>report</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals><goal>check</goal></goals>
+                        <configuration>
+                            <rules>
+                                <!-- Seuils de couverture : les regles metier et la securite ne doivent pas
+                                     regresser. A relever au fil des tests, jamais a abaisser. -->
+                                    <rule>
+                                        <element>PACKAGE</element>
+                                        <includes><include>com.recouvtech.recouvback.service</include></includes>
+                                        <limits>
+                                            <limit>
+                                                <counter>INSTRUCTION</counter>
+                                                <value>COVEREDRATIO</value>
+                                                <minimum>0.60</minimum>
+                                            </limit>
+                                        </limits>
+                                    </rule>
+                                    <rule>
+                                        <element>PACKAGE</element>
+                                        <includes><include>com.recouvtech.recouvback.security</include></includes>
+                                        <limits>
+                                            <limit>
+                                                <counter>INSTRUCTION</counter>
+                                                <value>COVEREDRATIO</value>
+                                                <minimum>0.80</minimum>
+                                            </limit>
+                                        </limits>
+                                    </rule>
+                                    <rule>
+                                        <element>PACKAGE</element>
+                                        <includes><include>com.recouvtech.recouvback.mapper</include></includes>
+                                        <limits>
+                                            <limit>
+                                                <counter>INSTRUCTION</counter>
+                                                <value>COVEREDRATIO</value>
+                                                <minimum>0.60</minimum>
+                                            </limit>
+                                        </limits>
+                                    </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- Compiler avec annotation processing pour Lombok -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

@@ -8,7 +8,7 @@ export const formatDate = (input: string | Date | undefined): string => {
     const date = new Date(input);
     if (isNaN(date.getTime())) return "Date invalide";
     return date.toLocaleDateString("fr-FR");
-  } catch (error) {
+  } catch {
     return "Date invalide";
   }
 };

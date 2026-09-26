@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import {
   ArrowUp,
-  ArrowDown,
-  BarChart,
   Calendar,
   AlertTriangle,
   PieChartIcon,
@@ -13,144 +12,55 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "../utils/formatters";
 import { useAuth } from "../contexts/AuthContext";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { apiFetch } from "@/lib/apiClient";
+import { useTotalCount } from "@/lib/pagedQueries";
+import { localDateIso } from "@/lib/dates";
+import { relanceSchema } from "@/schemas";
+import { z } from "zod";
+import QueryError from "@/components/QueryError";
+import DepartementComparison from "@/components/DepartementComparison";
 
-interface DashboardStats {
-  totalDebts: number;
-  totalAmount: number;
-  paidAmount: number;
-  recoveryRate: number;
-  overdueDebts: number;
-  todayReminders: number;
-  debtsByStatus: {
-    PAYEE: number;
-    IMPAYEE: number;
-    EN_RETARD: number;
-    PARTIELLEMENT_PAYEE: number;
-  };
-}
-
-interface Debt {
-  numFacture: string;
-  clientName: string;
-  montantFacture: number;
-  montantEncaisse: number;
-  solde: number;
-  statut: string;
-  dateEmission: string;
-  echeance: string;
-}
-
-interface Reminder {
-  id: string;
-  numFacture: string;
-  dateRelance: string;
-  typeRelance: string;
-  statutRelance: string;
-  debt?: {
-    numFacture: string;
-    clientName: string;
-    montantFacture: number;
-  };
-}
+// Agregats calcules par le serveur en base : le tableau de bord ne telecharge plus toutes
+// les creances et toutes les relances pour les compter.
+const statsSchema = z.object({
+  totalCreances: z.number(),
+  montantTotal: z.number(),
+  montantEncaisse: z.number(),
+  montantPenalites: z.number(),
+  /** Pourcentage encaisse / (facture + penalites), calcule par le serveur (une seule definition). */
+  tauxRecouvrement: z.number(),
+  parStatut: z.record(z.number()),
+});
 
 const Dashboard: React.FC = () => {
-  const { authToken, currentUser } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [todayReminders, setTodayReminders] = useState<Reminder[]>([]);
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+  const { currentUser } = useAuth();
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
+  const statsQuery = useQuery({
+    queryKey: ["/dashboard/stats"],
+    queryFn: ({ signal }) => apiFetch("/dashboard/stats", { schema: statsSchema, signal }),
+  });
+  const todayReminders = useTotalCount("/relances", relanceSchema, { dateRelance: localDateIso() });
 
-        const debtsResponse = await fetch(`${API_URL}/creances`, {
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json",
-          },
-        });
-        if (!debtsResponse.ok) throw new Error("Erreur fetch créances");
-        const debts: Debt[] = await debtsResponse.json();
+  // Une erreur reseau n'est plus affichee comme des zeros ("0 creance") : elle est signalee.
+  if (statsQuery.isError) {
+    return <QueryError what="le tableau de bord" error={statsQuery.error} onRetry={() => statsQuery.refetch()} />;
+  }
+  if (statsQuery.isLoading || !statsQuery.data) {
+    return <div className="flex justify-center items-center h-64 animate-spin rounded-full border-b-2 border-primary w-8 h-8"></div>;
+  }
 
-        const totalDebts = debts.length;
-        const totalAmount = debts.reduce((sum, d) => sum + (d.montantFacture || 0), 0);
-        const paidAmount = debts.reduce((sum, d) => sum + (d.montantEncaisse || 0), 0);
-        const recoveryRate = totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0;
-        const overdueDebts = debts.filter(d => d.statut === "EN_RETARD").length;
-
-        const debtsByStatus = {
-          PAYEE: debts.filter(d => d.statut === "PAYEE").length,
-          IMPAYEE: debts.filter(d => d.statut === "IMPAYEE").length,
-          EN_RETARD: debts.filter(d => d.statut === "EN_RETARD").length,
-          PARTIELLEMENT_PAYEE: debts.filter(d => d.statut === "PARTIELLEMENT_PAYEE").length,
-        };
-
-        const debtsMap = new Map(debts.map(d => [d.numFacture, d]));
-        const today = new Date().toISOString().split("T")[0];
-
-        const remindersResponse = await fetch(`${API_URL}/relances`, {
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json",
-          },
-        });
-        if (!remindersResponse.ok) throw new Error("Erreur fetch relances");
-        const remindersData: Reminder[] = await remindersResponse.json();
-
-        const todayRemindersData = remindersData
-          .filter(r => new Date(r.dateRelance).toISOString().split("T")[0] === today)
-          .map(r => ({
-            ...r,
-            debt: debtsMap.get(r.numFacture) ? {
-              numFacture: debtsMap.get(r.numFacture)!.numFacture,
-              clientName: debtsMap.get(r.numFacture)!.clientName,
-              montantFacture: debtsMap.get(r.numFacture)!.montantFacture
-            } : undefined
-          }));
-
-        setStats({
-          totalDebts,
-          totalAmount,
-          paidAmount,
-          recoveryRate,
-          overdueDebts,
-          todayReminders: todayRemindersData.length,
-          debtsByStatus,
-        });
-
-        setTodayReminders(todayRemindersData);
-      } catch (error) {
-        console.error(error);
-        setStats({
-          totalDebts: 0,
-          totalAmount: 0,
-          paidAmount: 0,
-          recoveryRate: 0,
-          overdueDebts: 0,
-          todayReminders: 0,
-          debtsByStatus: { PAYEE: 0, IMPAYEE: 0, EN_RETARD: 0, PARTIELLEMENT_PAYEE: 0 },
-        });
-        setTodayReminders([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (authToken) fetchDashboardData();
-    else setLoading(false);
-  }, [authToken]);
-
-  if (!authToken) return <p>Veuillez vous connecter pour accéder au tableau de bord</p>;
-  if (loading || !stats) return <div className="flex justify-center items-center h-64 animate-spin rounded-full border-b-2 border-primary w-8 h-8"></div>;
+  const s = statsQuery.data;
+  const par = (statut: string) => s.parStatut[statut] ?? 0;
+  const recoveryRate = s.tauxRecouvrement;
+  // Une creance penalisee (60 jours de retard ou plus) est aussi une creance en retard.
+  const overdueDebts = par("EN_RETARD") + par("PENALISEE");
 
   const chartData = [
-    { name: "Payées", value: stats.debtsByStatus.PAYEE, color: "#0a977c" },
-    { name: "Impayées", value: stats.debtsByStatus.IMPAYEE, color: "#1e3799" },
-    { name: "En retard", value: stats.debtsByStatus.EN_RETARD, color: "#e67e22" },
-    { name: "Partiellement payées", value: stats.debtsByStatus.PARTIELLEMENT_PAYEE, color: "#c23616" },
+    { name: "Payées", value: par("PAYEE"), color: "#0a977c" },
+    { name: "Impayées", value: par("IMPAYEE"), color: "#1e3799" },
+    { name: "En retard", value: par("EN_RETARD"), color: "#e67e22" },
+    { name: "Pénalisées", value: par("PENALISEE"), color: "#c23616" },
+    { name: "Partiellement payées", value: par("PARTIELLEMENT_PAYEE"), color: "#8e44ad" },
   ];
 
   return (
@@ -158,7 +68,10 @@ const Dashboard: React.FC = () => {
 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Tableau de bord</h1>
-        <span className="text-sm text-muted-foreground">Bonjour, {currentUser?.name}</span>
+        <span className="text-sm text-muted-foreground">
+          Bonjour, {currentUser?.name}
+          {currentUser?.role !== "admin" && currentUser?.departementNom ? ` — ${currentUser.departementNom}` : ""}
+        </span>
       </div>
 
       {/* Statistiques */}
@@ -170,7 +83,7 @@ const Dashboard: React.FC = () => {
             <Users className="h-5 w-5 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.totalDebts}</div>
+            <div className="text-3xl font-bold">{s.totalCreances}</div>
             <p className="text-xs text-muted-foreground mt-1">Nombre total de créances</p>
           </CardContent>
         </Card>
@@ -181,7 +94,7 @@ const Dashboard: React.FC = () => {
             <DollarSign className="h-5 w-5 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{formatCurrency(stats.totalAmount)} MAD</div>
+            <div className="text-3xl font-bold">{formatCurrency(s.montantTotal)} MAD</div>
             <p className="text-xs text-muted-foreground mt-1">Montant total des créances</p>
           </CardContent>
         </Card>
@@ -192,11 +105,11 @@ const Dashboard: React.FC = () => {
             <ArrowUp className="h-5 w-5 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{formatCurrency(stats.paidAmount)} MAD</div>
+            <div className="text-3xl font-bold">{formatCurrency(s.montantEncaisse)} MAD</div>
             <p className="text-xs text-muted-foreground mt-1">
               <span className="inline-flex items-center text-green-500">
                 <ArrowUp className="mr-1 h-3 w-3" />
-                {((stats.paidAmount / stats.totalAmount) * 100).toFixed(1)}%
+                {recoveryRate.toFixed(1)}%
               </span>{" "}
               Montant total encaissé
             </p>
@@ -209,7 +122,7 @@ const Dashboard: React.FC = () => {
             <PieChartIcon className="h-5 w-5 text-purple-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.recoveryRate.toFixed(1)} %</div>
+            <div className="text-3xl font-bold">{recoveryRate.toFixed(1)} %</div>
             <p className="text-xs text-muted-foreground mt-1">Pourcentage des créances recouvrées</p>
           </CardContent>
         </Card>
@@ -220,7 +133,7 @@ const Dashboard: React.FC = () => {
             <AlertTriangle className="h-5 w-5 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.overdueDebts}</div>
+            <div className="text-3xl font-bold">{overdueDebts}</div>
             <p className="text-xs text-muted-foreground mt-1">Nombre de créances en retard</p>
           </CardContent>
         </Card>
@@ -231,7 +144,7 @@ const Dashboard: React.FC = () => {
             <Calendar className="h-5 w-5 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.todayReminders}</div>
+            <div className="text-3xl font-bold">{(todayReminders.data ?? 0)}</div>
             <p className="text-xs text-muted-foreground mt-1">Relances à effectuer aujourd'hui</p>
           </CardContent>
         </Card>
@@ -265,6 +178,9 @@ const Dashboard: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Comparatif des departements : ADMIN uniquement (le serveur refuse tout autre role). */}
+      {currentUser?.role === "admin" && <DepartementComparison />}
 
     </div>
   );

@@ -3,16 +3,19 @@ package com.recouvtech.recouvback.entity;
 import com.recouvtech.recouvback.entity.enums.StatutRelance;
 import com.recouvtech.recouvback.entity.enums.TypeRelance;
 import jakarta.persistence.*;
-import org.hibernate.annotations.TenantId;
+import org.hibernate.annotations.Filter;
 import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+// @Getter/@Setter plutot que @Data : equals/hashCode/toString generes sur toutes les
+// associations parcourent creance -> client -> agent, ce qui declenche des chargements
+// paresseux (et des boucles) des qu'une relance est comparee ou journalisee.
 @Getter
 @Setter
 @Entity
-@Data
+@Filter(name = Departement.FILTRE, condition = Departement.CONDITION)
 @NoArgsConstructor
 @AllArgsConstructor
 public class Relance {
@@ -23,22 +26,23 @@ public class Relance {
 
 
     /**
-     * Organisation proprietaire. Renseignee et filtree automatiquement par
-     * Hibernate via @TenantId : ni les services ni les requetes n'ont a y penser.
+     * Departement de la relance : herite de sa creance a la creation, jamais fourni par l'appelant.
+     * Cloisonnement : filtre Hibernate "departement".
      */
-    @TenantId
-    @Column(name = "organisation_id", nullable = false)
-    private Long organisationId;
-    @ManyToOne
-    @JoinColumn(name = "creance_id", referencedColumnName = "id", nullable = false)
-    public Creance creance;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "departement_id", nullable = false)
+    private Departement departement;
 
-    @ManyToOne(optional = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "creance_id", referencedColumnName = "id", nullable = false)
+    private Creance creance;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_agent_recouv", nullable = false)
     private Utilisateur agentRecouv;
 
     @Column(name = "date_relance")
-    public LocalDate dateRelance;
+    private LocalDate dateRelance;
 
     @Column(name = "date_creation")
     private LocalDateTime dateCreation;
@@ -58,7 +62,7 @@ public class Relance {
     private StatutRelance statutRelance;
 
     @Column(name = "commentaire")
-    public String commentaire;
+    private String commentaire;
 
     @Column(name = "message", length = 1000)
     private String message;

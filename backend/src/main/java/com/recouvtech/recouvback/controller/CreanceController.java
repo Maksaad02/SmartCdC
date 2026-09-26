@@ -3,6 +3,10 @@ package com.recouvtech.recouvback.controller;
 import com.recouvtech.recouvback.dto.CreanceDTO.CreanceRequestDTO;
 import com.recouvtech.recouvback.dto.CreanceDTO.CreanceResponseDTO;
 import com.recouvtech.recouvback.service.CreanceService;
+import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import com.recouvtech.recouvback.entity.enums.StatutCreance;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,13 +22,17 @@ public class CreanceController {
     private final CreanceService creanceService;
 
     @PostMapping
-    public CreanceResponseDTO create(@RequestBody CreanceRequestDTO dto) {
+    public CreanceResponseDTO create(@Valid @RequestBody CreanceRequestDTO dto) {
         return creanceService.createCreance(dto);
     }
 
+    /** Liste paginee. Parametres : page, size (max 200), sort, q (n° facture ou client), statut, clientId. */
     @GetMapping
-    public List<CreanceResponseDTO> getAll() {
-        return creanceService.getAllCreances();
+    public Page<CreanceResponseDTO> getAll(@RequestParam(required = false) String q,
+                                           @RequestParam(required = false) StatutCreance statut,
+                                           @RequestParam(required = false) Long clientId,
+                                           Pageable pageable) {
+        return creanceService.list(q, statut, clientId, pageable);
     }
 
     @GetMapping("/{numFacture}")
@@ -33,7 +41,7 @@ public class CreanceController {
     }
 
     @PutMapping("/{numFacture}")
-    public CreanceResponseDTO update(@PathVariable String numFacture, @RequestBody CreanceRequestDTO dto) {
+    public CreanceResponseDTO update(@PathVariable String numFacture, @Valid @RequestBody CreanceRequestDTO dto) {
         return creanceService.updateCreance(numFacture, dto);
     }
 

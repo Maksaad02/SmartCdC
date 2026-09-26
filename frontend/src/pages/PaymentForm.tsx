@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -14,113 +15,94 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatCurrency } from "../utils/formatters";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
+import { apiFetch, errorMessage } from "@/lib/apiClient";
+import { fetchAllPages } from "@/lib/pagedQueries";
+import { localDateIso } from "@/lib/dates";
+import { creanceSchema, reglementSchema } from "@/schemas";
 
 const PaymentForm = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const isEditing = !!id;
-  const { authToken, currentUser } = useAuth();
-  const [loading, setLoading] = useState(false);
-
-  // Get debt ID from URL query params if it exists
-  const urlParams = new URLSearchParams(window.location.search);
-  const debtIdFromUrl = urlParams.get('debtId');
+  const { currentUser } = useAuth();
+  const [searchParams] = useSearchParams();
+  const debtIdFromUrl = searchParams.get("debtId");
 
   const [formData, setFormData] = useState({
     debtId: debtIdFromUrl || "",
     montantEncaisse: "",
-    dateReglement: "",
-    modePaiement: "virement",
+    dateReglement: localDateIso(),
+    // Valeurs de l'enum backend (ModePaiement) : l'ancienne liste ("carte") produisait,
+    // apres mise en majuscules, "CARTE" -- valeur inconnue du serveur.
+    modePaiement: "VIREMENT",
     reference: "",
     statut: "NON_EFFECTUE"
   });
 
-  const [debtsWithClients, setDebtsWithClients] = useState<any[]>([]);
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
-
-  // Fetch debts with remaining balance
+  // Creances a solder : toutes les pages (2000 maximum), puis filtre sur le solde restant.
+  const debtsQuery = useQuery({
+    queryKey: ["/creances", "options"],
+    queryFn: ({ signal }) => fetchAllPages("/creances", creanceSchema, { maxItems: 2000, signal }),
+  });
   useEffect(() => {
-    const fetchDebts = async () => {
-      try {
-        const response = await fetch(`${API_URL}/creances`, {
-          method: "GET",
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json"
-          }
-        });
-
-        if (!response.ok) {
-          console.error("Error response:", response.status);
-          throw new Error("Erreur lors du chargement des créances");
-        }
-
-        const debts = await response.json();
-        console.log("Fetched debts:", debts); // Debug log
-
-        // Filter debts with remaining balance and include penalties
-        const debtsWithRemaining = debts
-          .map((debt: any) => ({
-            ...debt,
-            // Use the solde field which already includes penalties, or calculate it
-            remaining: debt.solde || (debt.montantFacture + (debt.montantPenalites || 0) - debt.montantEncaisse),
-            // Add penalty info for display
-            hasPenalties: (debt.montantPenalites || 0) > 0,
-            totalWithPenalties: debt.montantFacture + (debt.montantPenalites || 0)
-          }))
-          .filter((debt: any) => debt.remaining > 0);
-
-        console.log("Processed debts:", debtsWithRemaining); // Debug log
-        setDebtsWithClients(debtsWithRemaining);
-      } catch (error) {
-        console.error("Error fetching debts:", error);
-        toast.error("Impossible de charger les créances");
-      }
-    };
-
-    fetchDebts();
-  }, [authToken]);
-
-  useEffect(() => {
-    if (isEditing && id) {
-      const fetchPayment = async () => {
-        setLoading(true);
-        try {
-          const response = await fetch(`${API_URL}/reglements/${id}`, {
-            headers: {
-              "Authorization": `Bearer ${authToken}`,
-              "Content-Type": "application/json"
-            }
-          });
-
-          if (!response.ok) throw new Error("Paiement non trouvé");
-
-          const payment = await response.json();
-          setFormData({
-            debtId: payment.debtId,
-            montantEncaisse: payment.montantEncaisse.toString(),
-            dateReglement: new Date(payment.dateReglement).toISOString().split("T")[0],
-            modePaiement: payment.modePaiement,
-            reference: payment.reference || "",
-            statut: payment.statut
-          });
-        } catch (error) {
-          toast.error("Erreur lors du chargement du paiement");
-          navigate("/payments");
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchPayment();
-    } else {
-      // Set default date to today for new payments
-      setFormData(prev => ({
-        ...prev,
-        dateReglement: new Date().toISOString().split("T")[0]
-      }));
+    if (debtsQuery.isError) toast.error("Impossible de charger les créances");
+    if (debtsQuery.data?.truncated) {
+      toast.warning("Plus de 2000 créances : la liste est tronquée. Filtrez depuis la page Créances.");
     }
-  }, [id, isEditing, authToken, navigate]);
+  }, [debtsQuery.isError, debtsQuery.data?.truncated]);
+
+  const debtsWithClients = useMemo(
+    () =>
+      (debtsQuery.data?.items ?? [])
+        .map((debt) => ({
+          ...debt,
+          remaining: debt.solde,
+          hasPenalties: debt.montantPenalites > 0,
+          totalWithPenalties: debt.montantFacture + debt.montantPenalites,
+        }))
+        .filter((debt) => debt.remaining > 0),
+    [debtsQuery.data],
+  );
+
+  // Creance pre-selectionnee par l'URL (?debtId=) : le montant par defaut (solde restant) doit etre
+  // renseigne comme lors d'une selection manuelle, sinon le formulaire reste invalide.
+  useEffect(() => {
+    if (isEditing || !debtIdFromUrl) return;
+    const debt = debtsWithClients.find((d) => d.numFacture === debtIdFromUrl);
+    if (!debt) return;
+    setFormData((prev) => (prev.montantEncaisse ? prev : { ...prev, montantEncaisse: debt.remaining.toString() }));
+  }, [isEditing, debtIdFromUrl, debtsWithClients]);
+
+  // Reglement a modifier : les champs renvoyes par l'API sont numFacture et montant
+  // (le formulaire lisait debtId et montantEncaisse, inexistants : la modification ne
+  // pre-remplissait rien).
+  const paymentQuery = useQuery({
+    queryKey: ["/reglements", id],
+    queryFn: ({ signal }) => apiFetch(`/reglements/${id}`, { schema: reglementSchema, signal }),
+    enabled: isEditing,
+  });
+  const loading = isEditing && paymentQuery.isLoading;
+
+  useEffect(() => {
+    const payment = paymentQuery.data;
+    if (!payment) return;
+    setFormData({
+      debtId: payment.numFacture ?? "",
+      montantEncaisse: payment.montant?.toString() ?? "",
+      dateReglement: payment.dateReglement ?? localDateIso(),
+      modePaiement: payment.modePaiement ?? "VIREMENT",
+      reference: payment.reference || "",
+      statut: payment.statut ?? "NON_EFFECTUE",
+    });
+  }, [paymentQuery.data]);
+
+  useEffect(() => {
+    if (paymentQuery.isError) {
+      toast.error("Erreur lors du chargement du paiement");
+      navigate("/payments");
+    }
+  }, [paymentQuery.isError, navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -130,11 +112,10 @@ const PaymentForm = () => {
   const handleSelectChange = (name: string, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }));
 
-    // If debt is selected, set the default amount to the remaining balance
+    // Creance choisie : le montant par defaut est le solde restant.
     if (name === "debtId") {
       const selectedDebt = debtsWithClients.find(d => d.numFacture === value);
       if (selectedDebt) {
-        console.log("Selected debt:", selectedDebt); // Debug log
         setFormData(prev => ({
           ...prev,
           debtId: value,
@@ -144,78 +125,65 @@ const PaymentForm = () => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    console.log(authToken)  // check if the token is available
+  const saveMutation = useMutation({
+    mutationFn: (payload: object) =>
+      apiFetch(isEditing ? `/reglements/${id}` : "/reglements", {
+        method: isEditing ? "PUT" : "POST",
+        body: payload,
+      }),
+    onSuccess: () => {
+      toast.success(isEditing ? "Règlement modifié avec succès" : "Règlement ajouté avec succès");
+      // Un reglement change le montant encaisse, le statut et le solde de la creance.
+      queryClient.invalidateQueries({ queryKey: ["/reglements"] });
+      queryClient.invalidateQueries({ queryKey: ["/creances"] });
+      queryClient.invalidateQueries({ queryKey: ["/dashboard/stats"] });
+      navigate("/payments");
+    },
+    onError: (err) => toast.error(errorMessage(err, "Erreur lors de l'enregistrement du règlement")),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
     if (!formData.debtId || !formData.montantEncaisse || !formData.dateReglement || !formData.modePaiement) {
       toast.error("Veuillez remplir tous les champs obligatoires");
       return;
     }
 
-    // Additional validation for payment amount
     const selectedDebt = debtsWithClients.find(d => d.numFacture === formData.debtId);
     const paymentAmount = parseFloat(formData.montantEncaisse);
 
-    if (!selectedDebt) {
+    // En modification, la creance peut etre deja soldee (donc absente de la liste) : le
+    // serveur reste juge du montant.
+    if (!selectedDebt && !isEditing) {
       toast.error("Veuillez sélectionner une créance valide");
       return;
     }
 
-    if (paymentAmount <= 0) {
+    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
       toast.error("Le montant du paiement doit être supérieur à 0");
       return;
     }
 
-    if (paymentAmount > selectedDebt.remaining) {
-      const totalWithPenalties = selectedDebt.totalWithPenalties;
-      const alreadyPaid = selectedDebt.montantEncaisse;
-      const remainingWithPenalties = selectedDebt.remaining;
-
-      let errorMessage = `Le montant du paiement ne peut pas dépasser le solde restant (${formatCurrency(remainingWithPenalties)} MAD)`;
-
+    if (selectedDebt && !isEditing && paymentAmount > selectedDebt.remaining) {
+      let message = `Le montant du paiement ne peut pas dépasser le solde restant (${formatCurrency(selectedDebt.remaining)} MAD)`;
       if (selectedDebt.hasPenalties) {
-        errorMessage += `\n\nDétail :\n- Montant facturé : ${formatCurrency(selectedDebt.montantFacture)} MAD\n- Pénalités : ${formatCurrency(selectedDebt.montantPenalites)} MAD\n- Total : ${formatCurrency(totalWithPenalties)} MAD\n- Déjà payé : ${formatCurrency(alreadyPaid)} MAD`;
+        message += `\n\nDétail :\n- Montant facturé : ${formatCurrency(selectedDebt.montantFacture)} MAD\n- Pénalités : ${formatCurrency(selectedDebt.montantPenalites)} MAD\n- Total : ${formatCurrency(selectedDebt.totalWithPenalties)} MAD\n- Déjà payé : ${formatCurrency(selectedDebt.montantEncaisse)} MAD`;
       }
-
-      toast.error(errorMessage);
+      toast.error(message);
       return;
     }
 
-    const payload = {
+    saveMutation.mutate({
       numFacture: formData.debtId,
-      montant: parseFloat(formData.montantEncaisse),
+      montant: paymentAmount,
       dateReglement: formData.dateReglement,
-      modePaiement: formData.modePaiement.toUpperCase(),
-      reference: formData.reference || `VIR-${String(Math.floor(Math.random() * 9999)).padStart(4, "0")}-${formData.debtId}`,
-      agentName: currentUser?.name || "Agent",
-      statut: formData.statut
-    };
-
-    try {
-      const url = isEditing
-        ? `${API_URL}/reglements/${id}`
-        : `${API_URL}/reglements`;
-
-      const methode = isEditing ? "PUT" : "POST";
-
-      const response = await fetch(url, {
-        method: methode,
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) throw new Error();
-
-      toast.success(isEditing ? "Règlement modifié avec succès" : "Règlement ajouté avec succès");
-      navigate("/payments");
-    } catch (err) {
-      toast.error("Erreur lors de l'enregistrement du règlement");
-    }
+      modePaiement: formData.modePaiement,
+      // Reference vide : laissee vide plutot qu'un faux numero de virement genere au hasard.
+      reference: formData.reference.trim() || undefined,
+      agentName: currentUser?.name || undefined,
+      statut: formData.statut,
+    });
   };
 
   return (
@@ -250,7 +218,7 @@ const PaymentForm = () => {
                       <SelectValue placeholder="Sélectionner une créance" />
                     </SelectTrigger>
                     <SelectContent>
-                      {debtsWithClients.map((debt: any) => (
+                      {debtsWithClients.map((debt) => (
                         <SelectItem key={debt.numFacture} value={debt.numFacture}>
                           {debt.numFacture} - {debt.clientName}
                           {debt.hasPenalties ? (
@@ -300,7 +268,7 @@ const PaymentForm = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="montantEncaisse">Montant encaissé (€)</Label>
+                  <Label htmlFor="montantEncaisse">Montant encaissé (MAD)</Label>
                   <Input
                     id="montantEncaisse"
                     name="montantEncaisse"
@@ -333,10 +301,11 @@ const PaymentForm = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="virement">Virement</SelectItem>
-                      <SelectItem value="cheque">Chèque</SelectItem>
-                      <SelectItem value="carte">Carte</SelectItem>
-                      <SelectItem value="especes">Espèces</SelectItem>
+                      <SelectItem value="VIREMENT">Virement</SelectItem>
+                      <SelectItem value="CHEQUE">Chèque</SelectItem>
+                      <SelectItem value="CARTE_BANCAIRE">Carte bancaire</SelectItem>
+                      <SelectItem value="ESPECES">Espèces</SelectItem>
+                      <SelectItem value="TRAITE">Traite</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -377,8 +346,8 @@ const PaymentForm = () => {
                 >
                   Annuler
                 </Button>
-                <Button type="submit" className="bg-debt-blue hover:bg-debt-lightBlue">
-                  {isEditing ? "Modifier" : "Ajouter"} le règlement
+                <Button type="submit" className="bg-debt-blue hover:bg-debt-lightBlue" disabled={saveMutation.isPending}>
+                  {saveMutation.isPending ? "Enregistrement…" : `${isEditing ? "Modifier" : "Ajouter"} le règlement`}
                 </Button>
               </div>
             </form>

@@ -1,0 +1,7 @@
+# Installation : pip install pre-commit && pre-commit install
+# Bloque un commit qui contiendrait un secret (cle API, mot de passe, jeton...).
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks

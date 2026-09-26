@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
@@ -6,91 +6,67 @@ import { Plus, Search, Download } from "lucide-react";
 import StatusBadge, { StatusType } from "../components/StatusBadge";
 import { formatDate, formatCurrency } from "../utils/formatters";
 import { toast } from "sonner";
-import { useAuth } from "../contexts/AuthContext";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import { creanceSchema } from "@/schemas";
+import { fetchAllPages, usePagedList } from "@/lib/pagedQueries";
+import { errorMessage } from "@/lib/apiClient";
+import PaginationBar from "@/components/PaginationBar";
+import QueryError from "@/components/QueryError";
 
+const EXPORT_MAX_ROWS = 5000;
 
-interface Debt {
-  numFacture: string;
-  dateEmission?: string;
-  echeance: string;
-  montantFacture: number;
-  montantEncaisse: number;
-  montantPenalites: number;
-  solde: number;
-  joursRetard: number;
-  statut: string;
-  clientName?: string;
-}
+// Filtre de statut : valeur d'interface -> valeur attendue par l'API.
+const STATUS_PARAM: Record<string, string> = {
+  payee: "PAYEE",
+  en_retard: "EN_RETARD",
+  penalisee: "PENALISEE",
+};
 
 const Debts: React.FC = () => {
-  const [debts, setDebts] = useState<Debt[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const { authToken } = useAuth();
+  const [exporting, setExporting] = useState(false);
 
+  // Recherche, filtre et pagination sont appliques par le serveur.
+  const filterParams = { statut: statusFilter ? STATUS_PARAM[statusFilter] : undefined };
+  const { items: debts, data, setPage, isLoading, isFetching, error, refetch } =
+    usePagedList("/creances", creanceSchema, { q: searchTerm, params: filterParams });
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+  // L'export doit couvrir TOUT le resultat filtre, pas seulement la page affichee.
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const { items, truncated } = await fetchAllPages("/creances", creanceSchema, {
+        params: { q: searchTerm.trim(), ...filterParams },
+        maxItems: EXPORT_MAX_ROWS,
+      });
+      const dataToExport = items.map(({ numFacture, echeance, montantFacture, montantEncaisse, montantPenalites, solde, statut, clientName, departementNom, joursRetard }) => ({
+        "N° Facture": numFacture,
+        "Échéance": echeance,
+        "Client": clientName,
+        "Département": departementNom,
+        "Montant Facturé (MAD)": montantFacture,
+        "Montant Payé (MAD)": montantEncaisse,
+        "Pénalités (MAD)": montantPenalites,
+        "Solde (MAD)": solde,
+        "Jours de retard": joursRetard,
+        "Statut": statut,
+      }));
 
-  useEffect(() => {
-    const fetchDebts = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`${API_URL}/creances`, {
-          method: "GET",
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json",
-          }
-        });
-        if (!response.ok) {
-          throw new Error(`Erreur ${response.status}`);
-        }
-        const data: Debt[] = await response.json();
-        setDebts(data);
-      } catch (error) {
-        console.error("Erreur lors de la récupération des créances :", error);
-        toast.error("Impossible de charger les créances.");
-      } finally {
-        setLoading(false);
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Créances");
+      const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+      saveAs(new Blob([excelBuffer], { type: "application/octet-stream" }), "creances.xlsx");
+      if (truncated) {
+        toast.warning(`Export limité aux ${EXPORT_MAX_ROWS} premières créances : affinez la recherche.`);
       }
-    };
-
-    fetchDebts();
-  }, [authToken]);
-
-  const filteredDebts = debts.filter((debt) => {
-    const searchLower = searchTerm.toLowerCase();
-    const matchesSearch =
-      debt.numFacture.toLowerCase().includes(searchLower) ||
-      debt.clientName?.toLowerCase().includes(searchLower) ||
-      formatCurrency(debt.montantFacture).includes(searchTerm);
-
-    const matchesStatus = !statusFilter || debt.statut.toLowerCase() === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  const handleExportExcel = () => {
-    const dataToExport = filteredDebts.map(({ numFacture, echeance, montantFacture, montantEncaisse, montantPenalites, solde, statut, clientName, joursRetard }) => ({
-      "N° Facture": numFacture,
-      "Échéance": echeance,
-      "Client": clientName,
-      "Montant Facturé (MAD)": montantFacture,
-      "Montant Payé (MAD)": montantEncaisse,
-      "Pénalités (MAD)": montantPenalites,
-      "Solde (MAD)": solde,
-      "Jours de retard": joursRetard,
-      "Statut": statut,
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Créances");
-    const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-    const file = new Blob([excelBuffer], { type: "application/octet-stream" });
-    saveAs(file, "creances.xlsx");
+    } catch (err) {
+      toast.error(errorMessage(err, "Export impossible."));
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -124,8 +100,9 @@ const Debts: React.FC = () => {
               <Button
                 className="bg-debt-blue hover:bg-debt-lightBlue text-white"
                 onClick={handleExportExcel}
+                disabled={exporting}
               >
-                <Download className="w-4 h-4 mr-2" /> Export Excel
+                <Download className="w-4 h-4 mr-2" /> {exporting ? "Export…" : "Export Excel"}
               </Button>
 
               <Button
@@ -164,7 +141,9 @@ const Debts: React.FC = () => {
           </div>
 
           <div className="mt-6 overflow-x-auto">
-            {loading ? (
+            {error && !data ? (
+              <QueryError what="les créances" error={error} onRetry={() => refetch()} />
+            ) : isLoading ? (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
@@ -174,6 +153,7 @@ const Debts: React.FC = () => {
                   <tr>
                     <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">N° Facture</th>
                     <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Client</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Département</th>
                     <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Échéance</th>
                     <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Montant facturé</th>
                     <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Montant payé</th>
@@ -185,18 +165,13 @@ const Debts: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {filteredDebts.map((debt) => {
-                    const today = new Date();
-                    const dueDate = new Date(debt.echeance);
-                    const daysLate = today > dueDate
-                      ? Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
-                      : 0;
-
+                  {debts.map((debt) => {
                     return (
                       <tr key={debt.numFacture} className="hover:bg-muted/50">
                         <td className="px-4 py-3 text-sm font-medium">{debt.numFacture}</td>
                         <td className="px-4 py-3 text-sm">{debt.clientName ?? "—"}</td>
-                        <td className="px-4 py-3 text-sm">{formatDate(debt.echeance)}</td>
+                        <td className="px-4 py-3 text-sm">{debt.departementNom ?? "—"}</td>
+                        <td className="px-4 py-3 text-sm">{formatDate(debt.echeance ?? undefined)}</td>
                         <td className="px-4 py-3 text-sm">{formatCurrency(debt.montantFacture)} MAD</td>
                         <td className="px-4 py-3 text-sm">{formatCurrency(debt.montantEncaisse)} MAD</td>
                         <td className="px-4 py-3 text-sm">
@@ -237,9 +212,9 @@ const Debts: React.FC = () => {
                     );
                   })}
 
-                  {filteredDebts.length === 0 && (
+                  {debts.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
+                      <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">
                         Aucune créance trouvée
                       </td>
                     </tr>
@@ -248,6 +223,8 @@ const Debts: React.FC = () => {
               </table>
             )}
           </div>
+
+          <PaginationBar data={data} onPageChange={setPage} isFetching={isFetching} />
         </div>
       </div>
     </div>

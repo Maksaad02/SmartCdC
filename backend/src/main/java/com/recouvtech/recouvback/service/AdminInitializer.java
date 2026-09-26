@@ -1,9 +1,9 @@
 package com.recouvtech.recouvback.service;
 
-import com.recouvtech.recouvback.dao.OrganisationRepository;
+import com.recouvtech.recouvback.dao.DepartementRepository;
 import com.recouvtech.recouvback.dao.RoleRepository;
 import com.recouvtech.recouvback.dao.UtilisateurRepository;
-import com.recouvtech.recouvback.entity.Organisation;
+import com.recouvtech.recouvback.entity.Departement;
 import com.recouvtech.recouvback.entity.Role;
 import com.recouvtech.recouvback.entity.Utilisateur;
 import com.recouvtech.recouvback.entity.enums.RoleAgent;
@@ -17,23 +17,25 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Cree le premier compte SUPER_ADMIN au demarrage, a partir de variables
- * d'environnement.
+ * Cree, au demarrage, le departement « Siege » s'il n'en existe aucun, puis le premier compte ADMIN a
+ * partir de variables d'environnement.
  *
- * Necessaire depuis que /api/register est reserve aux administrateurs : sans
- * amorcage, il serait impossible de creer le tout premier compte. Ne fait rien
- * si des utilisateurs existent deja, ou si les variables ne sont pas fournies.
+ * Necessaire car la creation de compte est reservee aux administrateurs : sans amorcage, il serait
+ * impossible de creer le tout premier compte. Le departement est cree meme sans variables : un
+ * ADMIN peut ensuite en creer d'autres depuis l'application. Ne cree aucun compte si des
+ * utilisateurs existent deja, ou si les variables ne sont pas fournies.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class AdminInitializer {
 
-    /** Doit correspondre a l'organisation inseree par la migration V2. */
-    public static final String ORGANISATION_PAR_DEFAUT = "Organisation par defaut";
+    /** Doit correspondre au code insere par la migration V7. */
+    public static final String DEPARTEMENT_PAR_DEFAUT_CODE = "SIEGE";
+    public static final String DEPARTEMENT_PAR_DEFAUT_NOM = "Siège";
 
     private final UtilisateurRepository utilisateurRepository;
-    private final OrganisationRepository organisationRepository;
+    private final DepartementRepository departementRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -49,6 +51,9 @@ public class AdminInitializer {
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void createFirstAdmin() {
+        if (departementRepository.count() == 0) {
+            departementRepository.save(new Departement(DEPARTEMENT_PAR_DEFAUT_NOM, DEPARTEMENT_PAR_DEFAUT_CODE));
+        }
         if (utilisateurRepository.count() > 0) {
             return;
         }
@@ -59,24 +64,17 @@ public class AdminInitializer {
             return;
         }
 
-        Organisation organisation = organisationRepository.findByNom(ORGANISATION_PAR_DEFAUT)
-                .orElseGet(() -> organisationRepository.save(new Organisation(ORGANISATION_PAR_DEFAUT)));
+        Role admin = roleRepository.findByNom(RoleAgent.ADMIN)
+                .orElseThrow(() -> new IllegalStateException("Rôle ADMIN introuvable"));
 
-        // Le compte d'amorcage est SUPER_ADMIN : c'est l'exploitant de la
-        // plateforme, celui qui cree ensuite les organisations clientes.
-        Role superAdmin = roleRepository.findByNom(RoleAgent.SUPER_ADMIN)
-                .orElseThrow(() -> new IllegalStateException("Rôle SUPER_ADMIN introuvable"));
+        // Un ADMIN n'appartient a aucun departement : il voit toute l'entreprise.
+        Utilisateur compte = new Utilisateur();
+        compte.setNom(adminName);
+        compte.setEmail(adminEmail);
+        compte.setMotDePasse(passwordEncoder.encode(adminPassword));
+        compte.setRole(admin);
 
-        Utilisateur admin = new Utilisateur();
-        admin.setNom(adminName);
-        admin.setEmail(adminEmail);
-        admin.setMotDePasse(passwordEncoder.encode(adminPassword));
-        admin.setRole(superAdmin);
-        admin.setOrganisation(organisation);
-
-        utilisateurRepository.save(admin);
-        log.info("Compte SUPER_ADMIN initial cree pour {} (organisation « {} »). "
-                        + "Changez ce mot de passe des la premiere connexion.",
-                adminEmail, organisation.getNom());
+        utilisateurRepository.save(compte);
+        log.info("Compte ADMIN initial cree pour {}. Changez ce mot de passe des la premiere connexion.", adminEmail);
     }
 }

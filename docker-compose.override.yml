@@ -1,0 +1,11 @@
+# Charge automatiquement par `docker compose up` : confort de developpement.
+# Ne PAS le deployer en production (utiliser `-f docker-compose.yml` seul).
+services:
+  mysql:
+    networks: [data, edge]
+    ports:
+      - "127.0.0.1:3306:3306"
+  pgvector:
+    networks: [data, edge]
+    ports:
+      - "127.0.0.1:5433:5432"
