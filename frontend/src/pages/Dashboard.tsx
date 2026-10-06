@@ -1,5 +1,6 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import {
@@ -19,6 +20,11 @@ import { relanceSchema } from "@/schemas";
 import { z } from "zod";
 import QueryError from "@/components/QueryError";
 import DepartementComparison from "@/components/DepartementComparison";
+import { useDepartements } from "@/lib/departements";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+/** Valeur de la liste deroulante pour la vue consolidee (aucun departement choisi). */
+const VUE_GENERALE = "all";
 
 // Agregats calcules par le serveur en base : le tableau de bord ne telecharge plus toutes
 // les creances et toutes les relances pour les compter.
@@ -34,12 +40,39 @@ const statsSchema = z.object({
 
 const Dashboard: React.FC = () => {
   const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === "admin";
+
+  // ADMIN : departement choisi dans la liste deroulante, garde dans l'URL (?departement=ID) pour
+  // survivre a un rechargement. Un identifiant inconnu retombe sur la vue generale.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const departementsQuery = useDepartements(isAdmin);
+  const departements = departementsQuery.data ?? [];
+  const demande = isAdmin ? Number(searchParams.get("departement")) || undefined : undefined;
+  const departementChoisi = departements.find((d) => d.id === demande);
+  const departementId = departementChoisi?.id;
+  // Tant que la liste n'est pas chargee, on ne sait pas si le departement demande existe.
+  const selectionResolue = demande === undefined || departementsQuery.data !== undefined;
+
+  const choisirDepartement = (valeur: string) => {
+    setSearchParams((params) => {
+      if (valeur === VUE_GENERALE) params.delete("departement");
+      else params.set("departement", valeur);
+      return params;
+    }, { replace: true });
+  };
 
   const statsQuery = useQuery({
-    queryKey: ["/dashboard/stats"],
-    queryFn: ({ signal }) => apiFetch("/dashboard/stats", { schema: statsSchema, signal }),
+    queryKey: ["/dashboard/stats", departementId ?? VUE_GENERALE],
+    queryFn: ({ signal }) =>
+      apiFetch(departementId ? `/dashboard/stats?departementId=${departementId}` : "/dashboard/stats", { schema: statsSchema, signal }),
+    enabled: selectionResolue,
+    // Changer de departement garde les chiffres affiches jusqu'a l'arrivee des nouveaux (pas de clignotement).
+    placeholderData: keepPreviousData,
   });
-  const todayReminders = useTotalCount("/relances", relanceSchema, { dateRelance: localDateIso() });
+  const todayReminders = useTotalCount("/relances", relanceSchema, {
+    dateRelance: localDateIso(),
+    ...(departementId ? { departementId } : {}),
+  });
 
   // Une erreur reseau n'est plus affichee comme des zeros ("0 creance") : elle est signalee.
   if (statsQuery.isError) {
@@ -66,11 +99,30 @@ const Dashboard: React.FC = () => {
   return (
     <div className="space-y-6">
 
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Tableau de bord</h1>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <h1 className="text-2xl font-bold tracking-tight">
+            Tableau de bord{departementChoisi ? ` — ${departementChoisi.nom}` : ""}
+          </h1>
+          {isAdmin && (
+            <Select value={departementId ? String(departementId) : VUE_GENERALE} onValueChange={choisirDepartement}>
+              <SelectTrigger aria-label="Département affiché" className="w-60">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={VUE_GENERALE}>Vue générale</SelectItem>
+                {departements.map((d) => (
+                  <SelectItem key={d.id} value={String(d.id)}>
+                    {d.nom}{d.actif ? "" : " (désactivé)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
         <span className="text-sm text-muted-foreground">
           Bonjour, {currentUser?.name}
-          {currentUser?.role !== "admin" && currentUser?.departementNom ? ` — ${currentUser.departementNom}` : ""}
+          {!isAdmin && currentUser?.departementNom ? ` — ${currentUser.departementNom}` : ""}
         </span>
       </div>
 
@@ -179,8 +231,8 @@ const Dashboard: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Comparatif des departements : ADMIN uniquement (le serveur refuse tout autre role). */}
-      {currentUser?.role === "admin" && <DepartementComparison />}
+      {/* Comparatif des departements : ADMIN uniquement (le serveur refuse tout autre role), en vue generale. */}
+      {isAdmin && !departementId && <DepartementComparison />}
 
     </div>
   );

@@ -71,6 +71,8 @@ services:
       CHATBOT_API_KEY: ${CHATBOT_API_KEY:?CHATBOT_API_KEY requis (32 caracteres minimum)}
       MAIL_USERNAME: ${MAIL_USERNAME:?MAIL_USERNAME requis}
       MAIL_PASSWORD: ${MAIL_PASSWORD:?MAIL_PASSWORD requis}
+      # Import automatique des factures PDF (Claude). Vide : fonctionnalite desactivee.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ADMIN_NAME: ${ADMIN_NAME:-Administrateur}

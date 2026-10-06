@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -112,6 +113,28 @@ public class ClientService {
                 .orElseThrow(() -> new RessourceIntrouvableException("Client introuvable"));
         assertCanAccess(client);
         clientRepository.delete(client);
+    }
+
+    /**
+     * Client designe par une facture importee : par ICE d'abord (identifiant fiscal, sans ambiguite),
+     * sinon par raison sociale exacte. Seulement dans le perimetre de l'appelant (filtre de
+     * departement, portefeuille d'un AGENT) : un client hors perimetre n'est pas "trouve".
+     */
+    public Optional<String> trouverPourFacture(String ice, String raisonSociale) {
+        Client client = null;
+        if (ice != null && !ice.isBlank()) {
+            client = clientRepository.findByIce(ice.trim());
+        }
+        if (client == null && raisonSociale != null && !raisonSociale.isBlank()) {
+            client = clientRepository.findByRaisonSociale(raisonSociale.trim());
+        }
+        if (client == null) {
+            return Optional.empty();
+        }
+        String ownerEmail = client.getAgentRecouv() != null ? client.getAgentRecouv().getEmail() : null;
+        return currentUser.canAccess(client.getDepartement().getId(), ownerEmail)
+                ? Optional.of(client.getRaisonSociale())
+                : Optional.empty();
     }
 
     private void assertCanAccess(Client client) {

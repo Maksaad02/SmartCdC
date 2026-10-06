@@ -25,6 +25,10 @@ public final class RelanceSpecs {
         return (root, query, cb) -> cb.equal(root.get("creance").get("numFacture"), numFacture);
     }
 
+    public static Specification<Relance> inDepartement(Long departementId) {
+        return (root, query, cb) -> cb.equal(root.get("departement").get("id"), departementId);
+    }
+
     public static Specification<Relance> onDate(LocalDate date) {
         return (root, query, cb) -> cb.equal(root.get("dateRelance"), date);
     }

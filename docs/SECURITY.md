@@ -20,6 +20,28 @@ supprimer tout transfert à un tiers, il faut remplacer le fournisseur par un mo
 client (Ollama ou équivalent) : c'est un changement de configuration Spring AI, mais il impose un
 serveur adapté et une réindexation (dimension d'embedding différente).
 
+## Données envoyées à Anthropic (import des factures PDF)
+
+Quand un utilisateur clique sur « Importer une facture (PDF) », le backend lit la facture pour
+pré-remplir le formulaire de créance avec Claude (Anthropic, hébergé hors du Maroc). Mêmes
+précautions que ci-dessus : **à valider avec le client** (loi 09-08 / CNDP, RGPD) et à couvrir par le
+DPA d'Anthropic. Sans `ANTHROPIC_API_KEY`, la fonctionnalité est désactivée et rien n'est envoyé.
+
+| Ce qui part chez Anthropic | Détail |
+|---|---|
+| Facture numérique | **Le texte** de la facture seulement, extrait sur le serveur (PDFBox) : numéro, dates, montants, raison sociale et ICE de l'émetteur et du client, lignes de facturation |
+| Facture scannée (sans texte) | **Le fichier PDF** lui-même, pour une lecture visuelle |
+
+Ne partent **pas** : les données de la base (clients, autres créances, utilisateurs). La réponse ne
+fait que pré-remplir un formulaire que l'utilisateur relit ; rien n'est enregistré sans lui. Le texte
+de la facture est transmis comme une donnée balisée, avec consigne de ne jamais suivre d'instruction
+qu'il contiendrait. Le contenu des factures n'est pas journalisé (seulement l'identifiant de requête
+et le nombre de jetons). Coût borné : 30 lectures par utilisateur et par heure (`app.extraction.par-heure`),
+10 Mo et 10 pages par fichier.
+
+Le PDF d'origine est conservé en base (`creance_document`), soumis au cloisonnement par département
+et aux mêmes droits que sa créance ; il est inclus dans les sauvegardes MySQL.
+
 ## Contrôles en place
 
 | Menace | Contrôle |

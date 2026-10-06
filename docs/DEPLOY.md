@@ -40,6 +40,7 @@ Au premier démarrage, Flyway crée le schéma MySQL (V1 à V7), le département
 | `CHATBOT_API_KEY` | Clé de service backend ↔ chatbot (32 caractères minimum) |
 | `MAIL_USERNAME`, `MAIL_PASSWORD` | SMTP (relances par e-mail) |
 | `OPENAI_API_KEY` | Clé OpenAI dédiée |
+| `ANTHROPIC_API_KEY` | Optionnelle. Import automatique des factures PDF (Claude) ; vide = fonctionnalité désactivée. Clé dédiée avec limite de dépense |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME` | Premier compte (ignoré une fois un utilisateur créé) |
 | `COOKIE_SECURE` | `true` (défaut, exige HTTPS). `false` uniquement pour un essai HTTP sans TLS |
 
@@ -82,6 +83,7 @@ pas). Procédure : arrêter, restaurer la sauvegarde MySQL d'avant la mise à jo
 | `CHATBOT_API_KEY` | Nouvelle valeur dans `.env`, `docker compose up -d backend rag` | Aucune |
 | Mots de passe des bases | Changer dans la base **puis** dans `.env`, redémarrer les services | Brève interruption |
 | Clé OpenAI | Créer la nouvelle clé, la mettre dans `.env`, `docker compose up -d rag`, révoquer l'ancienne | Aucune |
+| Clé Anthropic | Créer la nouvelle clé, la mettre dans `.env`, `docker compose up -d backend`, révoquer l'ancienne | Aucune |
 | Mot de passe SMTP | Mettre à jour `.env`, `docker compose up -d backend` | Aucune |
 
 En cas de fuite d'un secret : le changer immédiatement, puis lire `docs/SECURITY.md` § Incident.

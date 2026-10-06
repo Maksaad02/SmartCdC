@@ -29,6 +29,8 @@ class SecurityRulesTest {
     @Test
     void uneRequeteSansJetonEstRefuseeEn401() throws Exception {
         mvc.perform(get("/api/clients")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/factures/extraction/statut")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/creances/F-1/document")).andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -71,6 +73,8 @@ class SecurityRulesTest {
     @WithMockUser(roles = "AGENT")
     void unAgentNAccedeNiAuComparatifNiAuxDepartementsAdmin() throws Exception {
         mvc.perform(get("/api/dashboard/departements")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/dashboard/stats").param("departementId", "1")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/relances").param("departementId", "1")).andExpect(status().isForbidden());
         mvc.perform(delete("/api/departements/1")).andExpect(status().isForbidden());
     }
 

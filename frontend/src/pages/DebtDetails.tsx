@@ -21,6 +21,7 @@ import { apiFetch } from "@/lib/apiClient";
 import { fetchAllPages } from "@/lib/pagedQueries";
 import { creanceSchema, relanceSchema, reglementSchema } from "@/schemas";
 import QueryError from "@/components/QueryError";
+import FactureDocument from "@/components/debt/FactureDocument";
 
 const REMINDER_LABELS: Record<string, { label: string; className: string }> = {
   EN_ATTENTE: { label: "En attente", className: "bg-gray-500" },
@@ -133,6 +134,7 @@ const DebtDetails: React.FC = () => {
           <h1 className="text-2xl font-bold tracking-tight">Facture {debt.numFacture}</h1>
         </div>
         <div className="flex space-x-2">
+          <FactureDocument numFacture={debt.numFacture} />
           <Link to={`/debts/${debt.numFacture}/edit`}>
             <Button variant="outline">
               <Edit className="mr-2 h-4 w-4" /> Modifier

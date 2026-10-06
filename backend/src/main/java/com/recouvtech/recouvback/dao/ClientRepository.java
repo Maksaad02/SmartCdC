@@ -35,6 +35,8 @@ public interface ClientRepository extends JpaRepository<Client, Long>, JpaSpecif
 
     Client findByRaisonSociale(String clientName);
 
+    Client findByIce(String ice);
+
     /**
      * Liste paginee. L'agent est charge avec le client (EntityGraph) : le mapping
      * en DTO lit agentRecouv.nom, ce qui declenchait sinon une requete par ligne.

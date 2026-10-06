@@ -65,16 +65,29 @@ public class RelanceService {
      */
     public Page<RelanceResponseDTO> list(String q, StatutRelance statut, String numFacture,
                                          LocalDate date, Pageable pageable) {
+        return list(q, statut, numFacture, date, null, pageable);
+    }
+
+    /** Idem, restreinte a un departement quand {@code departementId} est fourni (ADMIN uniquement). */
+    public Page<RelanceResponseDTO> list(String q, StatutRelance statut, String numFacture,
+                                         LocalDate date, Long departementId, Pageable pageable) {
+        if (departementId != null && !currentUser.isAdmin()) {
+            throw new AccessDeniedException("Seul un administrateur peut filtrer par département");
+        }
         return relanceRepository
-                .findAll(filtre(q, statut, numFacture, date),
+                .findAll(filtre(q, statut, numFacture, date, departementId),
                         PageRequests.sanitize(pageable, SORTABLE, Sort.by(Sort.Direction.DESC, "dateRelance", "id")))
                 .map(RelanceMapper::toDto);
     }
 
-    private Specification<Relance> filtre(String q, StatutRelance statut, String numFacture, LocalDate date) {
+    private Specification<Relance> filtre(String q, StatutRelance statut, String numFacture, LocalDate date,
+                                          Long departementId) {
         Specification<Relance> spec = Specification.where(null);
         if (currentUser.isAgent()) {
             spec = spec.and(RelanceSpecs.ownedBy(currentUser.email()));
+        }
+        if (departementId != null) {
+            spec = spec.and(RelanceSpecs.inDepartement(departementId));
         }
         if (statut != null) {
             spec = spec.and(RelanceSpecs.hasStatut(statut));

@@ -2,6 +2,7 @@ package com.recouvtech.recouvback.service;
 
 import com.recouvtech.recouvback.dao.ClientRepository;
 import com.recouvtech.recouvback.dao.CreanceRepository;
+import com.recouvtech.recouvback.dao.DepartementRepository;
 import com.recouvtech.recouvback.dao.spec.CreanceSpecs;
 import com.recouvtech.recouvback.dto.CreanceDTO.CreanceStatsDTO;
 import com.recouvtech.recouvback.dto.CreanceDTO.DashboardDepartementsDTO;
@@ -54,6 +55,7 @@ public class CreanceService {
     private final PenaliteService penaliteService;
     private final RelanceAutomatiqueService relanceAutomatiqueService;
     private final CurrentUser currentUser;
+    private final DepartementRepository departementRepository;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -126,10 +128,30 @@ public class CreanceService {
      * ne telecharge plus toutes les creances pour les compter.
      */
     public CreanceStatsDTO stats() {
-        // ADMIN : toute l'entreprise ; MANAGER : son departement (filtre Hibernate) ; AGENT : son portefeuille.
-        List<Object[]> lignes = currentUser.isAgent()
-                ? creanceRepository.statsByStatutForAgent(currentUser.email())
-                : creanceRepository.statsByStatut();
+        return stats(null);
+    }
+
+    /**
+     * Meme agregat, restreint a un departement quand {@code departementId} est fourni : reserve aux
+     * ADMIN (un MANAGER ou un AGENT est deja limite a son perimetre ; une demande hors perimetre est
+     * refusee plutot qu'ignoree en silence).
+     */
+    public CreanceStatsDTO stats(Long departementId) {
+        List<Object[]> lignes;
+        if (departementId != null) {
+            if (!currentUser.isAdmin()) {
+                throw new AccessDeniedException("Seul un administrateur peut filtrer par département");
+            }
+            if (!departementRepository.existsById(departementId)) {
+                throw new RessourceIntrouvableException("Département introuvable");
+            }
+            lignes = creanceRepository.statsByStatutForDepartement(departementId);
+        } else {
+            // ADMIN : toute l'entreprise ; MANAGER : son departement (filtre Hibernate) ; AGENT : son portefeuille.
+            lignes = currentUser.isAgent()
+                    ? creanceRepository.statsByStatutForAgent(currentUser.email())
+                    : creanceRepository.statsByStatut();
+        }
 
         Map<StatutCreance, Long> parStatut = new EnumMap<>(StatutCreance.class);
         for (StatutCreance s : StatutCreance.values()) {
@@ -193,6 +215,16 @@ public class CreanceService {
         }
         assertCanAccess(creance);
         return CreanceMapper.toDto(withPenalitesCalculees(creance));
+    }
+
+    /** Entite de la creance, si elle existe et appartient au perimetre de l'appelant (sinon 404 / 403). */
+    public Creance chargerAccessible(String numFacture) {
+        Creance creance = creanceRepository.findByNumFacture(numFacture);
+        if (creance == null) {
+            throw new RessourceIntrouvableException("Créance non trouvée pour la facture : " + numFacture);
+        }
+        assertCanAccess(creance);
+        return creance;
     }
 
     @Transactional

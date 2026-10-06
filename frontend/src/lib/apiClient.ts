@@ -37,8 +37,10 @@ export class ApiError extends Error {
 
 interface RequestOptions<T> {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  /** Corps JSON : sera serialise. */
+  /** Corps JSON (serialise), ou FormData envoye tel quel (fichiers, multipart). */
   body?: unknown;
+  /** "blob" pour un telechargement de fichier (pas de JSON a lire ni a valider). */
+  responseType?: "json" | "blob";
   /** Schema de validation de la reponse ; sans schema, la reponse n'est pas verifiee. */
   schema?: z.ZodType<T>;
   signal?: AbortSignal;
@@ -74,8 +76,20 @@ const messageForStatus = (status: number): string => {
 const readErrorMessage = async (response: Response): Promise<string> => {
   const fallback = messageForStatus(response.status);
   // 401/403 : le message du serveur est generique, le notre est plus utile.
-  if (response.status === 401 || response.status === 403 || response.status >= 500) {
+  if (response.status === 401 || response.status === 403) {
     return fallback;
+  }
+  // 5xx : seul le message JSON du backend est repris (GlobalExceptionHandler ne met jamais de detail
+  // technique dans "message", ex. « Service de lecture des factures indisponible »). Une page HTML de
+  // nginx (backend arrete) ou un texte brut donnent le message generique.
+  if (response.status >= 500) {
+    try {
+      const json: unknown = JSON.parse(await response.text());
+      const message = json && typeof json === "object" ? (json as { message?: unknown }).message : undefined;
+      return typeof message === "string" && message ? message : fallback;
+    } catch {
+      return fallback;
+    }
   }
   try {
     const text = await response.text();
@@ -115,10 +129,13 @@ export async function apiFetch<T = unknown>(
     timeoutMs = DEFAULT_TIMEOUT_MS,
     authenticated = true,
     retried = false,
+    responseType = "json",
   } = options;
 
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  const headers: Record<string, string> = { Accept: responseType === "blob" ? "*/*" : "application/json" };
+  // Multipart : le navigateur fixe lui-meme Content-Type avec la frontiere (boundary).
+  if (body !== undefined && !isFormData) headers["Content-Type"] = "application/json";
 
   const token = authenticated ? getAccessToken() : null;
   if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -141,7 +158,7 @@ export async function apiFetch<T = unknown>(
     response = await fetch(`${API_URL}${path}`, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : isFormData ? (body as FormData) : JSON.stringify(body),
       signal: controller.signal,
     });
   } catch {
@@ -168,6 +185,8 @@ export async function apiFetch<T = unknown>(
     }
     throw new ApiError(await readErrorMessage(response), "http", response.status);
   }
+
+  if (responseType === "blob") return (await response.blob()) as T;
 
   // 204 ou corps vide (DELETE, PUT sans retour) : rien a valider.
   const text = await response.text();

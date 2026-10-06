@@ -77,6 +77,27 @@ describe("apiFetch", () => {
     await expect(apiFetch("/x")).rejects.toThrow("Email déjà utilisé");
   });
 
+  it("reprend le message JSON du backend sur une 5xx", async () => {
+    fetchMock.mockResolvedValue(json({ message: "Service de lecture des factures indisponible, réessayez plus tard" }, 503));
+
+    await expect(apiFetch("/x")).rejects.toMatchObject({
+      status: 503,
+      message: "Service de lecture des factures indisponible, réessayez plus tard",
+    });
+  });
+
+  it("n'affiche jamais une page d'erreur HTML (nginx) sur une 5xx", async () => {
+    fetchMock.mockResolvedValue(new Response("<html><body><h1>502 Bad Gateway</h1></body></html>", { status: 502 }));
+
+    await expect(apiFetch("/x")).rejects.toMatchObject({ status: 502, message: "Erreur du serveur. Veuillez réessayer." });
+  });
+
+  it("garde le message generique pour une 5xx sans corps", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 500 }));
+
+    await expect(apiFetch("/x")).rejects.toMatchObject({ status: 500, message: "Erreur du serveur. Veuillez réessayer." });
+  });
+
   it("renvoie undefined pour un corps vide (DELETE)", async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
 

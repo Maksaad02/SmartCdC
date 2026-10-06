@@ -7,6 +7,7 @@ import com.recouvtech.recouvback.service.CreanceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -18,11 +19,12 @@ public class DashboardController {
 
     /**
      * Agregats des creances de l'appelant : toute l'entreprise pour un ADMIN, son departement pour un
-     * MANAGER, son portefeuille pour un AGENT. Calcules en base.
+     * MANAGER, son portefeuille pour un AGENT. Calcules en base. {@code departementId} (ADMIN
+     * uniquement) restreint l'agregat a un departement.
      */
     @GetMapping("/stats")
-    public CreanceStatsDTO stats() {
-        return creanceService.stats();
+    public CreanceStatsDTO stats(@RequestParam(required = false) Long departementId) {
+        return creanceService.stats(departementId);
     }
 
     /** Comparatif consolide des departements : reserve aux ADMIN. */

@@ -13,6 +13,8 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -36,6 +38,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RessourceIntrouvableException.class)
     public ResponseEntity<Map<String, Object>> introuvable(RessourceIntrouvableException e) {
         return reponse(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+
+    @ExceptionHandler(ExtractionException.class)
+    public ResponseEntity<Map<String, Object>> extraction(ExtractionException e) {
+        return reponse(e.getStatut(), e.getMessage());
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, Object>> fichierTropGros(MaxUploadSizeExceededException e) {
+        return reponse(HttpStatus.PAYLOAD_TOO_LARGE, "Fichier trop volumineux (10 Mo maximum)");
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<Map<String, Object>> fichierAbsent(MissingServletRequestPartException e) {
+        return reponse(HttpStatus.BAD_REQUEST, "Fichier manquant");
     }
 
     @ExceptionHandler(AccessDeniedException.class)

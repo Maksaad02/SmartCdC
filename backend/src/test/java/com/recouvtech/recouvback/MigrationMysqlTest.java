@@ -54,7 +54,7 @@ class MigrationMysqlTest {
         List<String> versions = jdbc.queryForList(
                 "select version from flyway_schema_history where success = 1 order by installed_rank", String.class);
 
-        assertEquals(List.of("1", "2", "3", "4", "5", "6", "7"), versions);
+        assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8"), versions);
     }
 
     /**
@@ -104,9 +104,18 @@ class MigrationMysqlTest {
                 () -> jdbc.update("insert into relance (creance_id, id_agent_recouv, departement_id) values (?, ?, ?)", creanceX, agent, y),
                 "une relance ne peut pas quitter le departement de sa creance");
 
+        String document = "insert into creance_document (creance_id, departement_id, nom_fichier, taille, sha256, contenu, date_ajout) "
+                + "values (?, ?, 'f.pdf', 4, 'abc', x'25504446', now())";
+        assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
+                () -> jdbc.update(document, creanceX, y),
+                "la facture PDF ne peut pas quitter le departement de sa creance");
+
         // Les cas coherents passent.
         jdbc.update("insert into reglement (montant, creance_id, departement_id) values (10, ?, ?)", creanceX, x);
         jdbc.update("insert into relance (creance_id, id_agent_recouv, departement_id) values (?, ?, ?)", creanceX, agent, x);
+        jdbc.update(document, creanceX, x);
+        assertThrows(org.springframework.dao.DuplicateKeyException.class, () -> jdbc.update(document, creanceX, x),
+                "une seule facture PDF par creance");
     }
 
     @Test

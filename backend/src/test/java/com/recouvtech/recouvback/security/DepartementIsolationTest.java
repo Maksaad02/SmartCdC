@@ -29,6 +29,8 @@ import com.recouvtech.recouvback.entity.enums.StatutRelance;
 import com.recouvtech.recouvback.entity.enums.TypeRelance;
 import com.recouvtech.recouvback.exception.RessourceIntrouvableException;
 import com.recouvtech.recouvback.service.ClientService;
+import com.recouvtech.recouvback.service.CreanceDocumentService;
+import com.recouvtech.recouvback.service.facture.PdfDeTest;
 import com.recouvtech.recouvback.service.CreanceService;
 import com.recouvtech.recouvback.service.EmailService;
 import com.recouvtech.recouvback.service.PenalitesScheduler;
@@ -72,6 +74,7 @@ class DepartementIsolationTest {
     @Autowired private CreanceService creanceService;
     @Autowired private ReglementService reglementService;
     @Autowired private RelanceService relanceService;
+    @Autowired private CreanceDocumentService documentService;
     @Autowired private PenalitesScheduler penalitesScheduler;
 
     @Autowired private DepartementRepository departementRepository;
@@ -291,6 +294,84 @@ class DepartementIsolationTest {
         assertTrue(dash.global().nbCreances() >= 3);
         long somme = dash.departements().stream().mapToLong(d -> d.nbCreances()).sum();
         assertEquals(somme, dash.global().nbCreances(), "le global est la somme des departements");
+    }
+
+    @Test
+    void lAdminFiltreLeTableauDeBordParDepartement() {
+        connecte(admin);
+
+        assertEquals(2, creanceService.stats(deptA.getId()).totalCreances());
+        assertEquals(0, new BigDecimal("1500.00").compareTo(creanceService.stats(deptA.getId()).montantTotal()));
+        assertEquals(1, creanceService.stats(deptB.getId()).totalCreances());
+
+        var relancesB = relanceService.list(null, null, null, null, deptB.getId(), PageRequest.of(0, 50)).getContent();
+        assertTrue(relancesB.stream().anyMatch(r -> r.getId().equals(relanceB.getId())));
+        assertTrue(relancesB.stream().noneMatch(r -> r.getId().equals(relanceA1.getId())));
+
+        assertThrows(RessourceIntrouvableException.class, () -> creanceService.stats(-1L));
+    }
+
+    @Test
+    void unManagerNePeutPasFiltrerParDepartement() {
+        connecte(managerA);
+
+        assertThrows(AccessDeniedException.class, () -> creanceService.stats(deptA.getId()));
+        assertThrows(AccessDeniedException.class, () -> creanceService.stats(deptB.getId()));
+        assertThrows(AccessDeniedException.class,
+                () -> relanceService.list(null, null, null, null, deptB.getId(), PageRequest.of(0, 50)));
+    }
+
+    // ---------------------------------------------------------------- Facture PDF jointe et import
+
+    @Test
+    void laFacturePdfSuitLesDroitsDeSaCreance() {
+        byte[] pdf = PdfDeTest.avecTexte("Facture " + creanceA1.getNumFacture());
+        connecte(agentA1);
+        documentService.enregistrer(creanceA1.getNumFacture(), "C:\\factures\\scan.pdf", pdf);
+
+        var info = documentService.info(creanceA1.getNumFacture());
+        assertEquals("scan.pdf", info.nomFichier(), "le chemin du poste client n'est pas conserve");
+        assertEquals(pdf.length, info.taille());
+
+        connecte(managerA);
+        assertArrayEquals(pdf, documentService.telecharger(creanceA1.getNumFacture()).contenu());
+
+        // Autre departement : la creance (donc sa facture) n'existe pas pour lui.
+        connecte(managerB);
+        assertThrows(RessourceIntrouvableException.class, () -> documentService.info(creanceA1.getNumFacture()));
+        assertThrows(RessourceIntrouvableException.class, () -> documentService.telecharger(creanceA1.getNumFacture()));
+        assertThrows(RessourceIntrouvableException.class,
+                () -> documentService.enregistrer(creanceA1.getNumFacture(), "x.pdf", pdf));
+
+        // Meme departement mais pas son portefeuille.
+        connecte(agentA2);
+        assertThrows(AccessDeniedException.class, () -> documentService.telecharger(creanceA1.getNumFacture()));
+    }
+
+    @Test
+    void joindreUneNouvelleFactureRemplaceLaPrecedente() {
+        connecte(admin);
+        documentService.enregistrer(creanceB.getNumFacture(), "v1.pdf", PdfDeTest.avecTexte("v1"));
+        byte[] v2 = PdfDeTest.avecTexte("v2");
+        documentService.enregistrer(creanceB.getNumFacture(), "v2", v2);
+
+        assertEquals("v2.pdf", documentService.info(creanceB.getNumFacture()).nomFichier());
+        assertArrayEquals(v2, documentService.telecharger(creanceB.getNumFacture()).contenu());
+        assertThrows(RuntimeException.class,
+                () -> documentService.enregistrer(creanceB.getNumFacture(), "faux.pdf", "pas un pdf".getBytes()));
+    }
+
+    @Test
+    void lImportNeRetrouveQueLesClientsDuPerimetre() {
+        connecte(managerA);
+        assertEquals(clientA1.getRaisonSociale(),
+                clientService.trouverPourFacture(null, clientA1.getRaisonSociale()).orElse(null));
+        assertTrue(clientService.trouverPourFacture(null, clientB.getRaisonSociale()).isEmpty(),
+                "un client d'un autre departement n'est pas propose");
+
+        connecte(agentA1);
+        assertTrue(clientService.trouverPourFacture(null, clientA2.getRaisonSociale()).isEmpty(),
+                "un AGENT ne se voit proposer que les clients de son portefeuille");
     }
 
     /** Taches planifiees et ecouteurs asynchrones : pas d'utilisateur, donc aucun filtre. */

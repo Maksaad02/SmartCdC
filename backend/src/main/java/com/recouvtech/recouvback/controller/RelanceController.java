@@ -31,14 +31,18 @@ public class RelanceController {
         return relanceService.create(dto);
     }
 
-    /** Liste paginee. Parametres : page, size (max 200), sort, q, statutRelance, numFacture, dateRelance. */
+    /**
+     * Liste paginee. Parametres : page, size (max 200), sort, q, statutRelance, numFacture, dateRelance,
+     * departementId (ADMIN uniquement).
+     */
     @GetMapping
     public Page<RelanceResponseDTO> getAll(@RequestParam(required = false) String q,
                                            @RequestParam(required = false) StatutRelance statutRelance,
                                            @RequestParam(required = false) String numFacture,
                                            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateRelance,
+                                           @RequestParam(required = false) Long departementId,
                                            Pageable pageable) {
-        return relanceService.list(q, statutRelance, numFacture, dateRelance, pageable);
+        return relanceService.list(q, statutRelance, numFacture, dateRelance, departementId, pageable);
     }
 
     @GetMapping("/{id}")

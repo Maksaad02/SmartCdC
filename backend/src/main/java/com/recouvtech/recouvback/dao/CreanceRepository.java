@@ -80,6 +80,11 @@ public interface CreanceRepository extends JpaRepository<Creance, Long>, JpaSpec
             "COALESCE(SUM(c.montantPenalites), 0) FROM Creance c WHERE c.agentRecouv.email = :email GROUP BY c.statut")
     List<Object[]> statsByStatutForAgent(@Param("email") String email);
 
+    /** Agregats par statut d'un seul departement (tableau de bord ADMIN filtre sur un departement). */
+    @Query("SELECT c.statut, COUNT(c), COALESCE(SUM(c.montantFacture), 0), COALESCE(SUM(c.montantEncaisse), 0), " +
+            "COALESCE(SUM(c.montantPenalites), 0) FROM Creance c WHERE c.departement.id = :departementId GROUP BY c.statut")
+    List<Object[]> statsByStatutForDepartement(@Param("departementId") Long departementId);
+
     /**
      * Comparatif des departements (tableau de bord ADMIN) en UNE requete agregee, departements sans
      * creance inclus. Colonnes : id, nom, nombre, facture, penalites, encaisse, nombre en retard

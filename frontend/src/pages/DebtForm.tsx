@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import React, { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Info } from "lucide-react";
+import { FileText, Info, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { apiFetch, errorMessage } from "@/lib/apiClient";
@@ -21,6 +21,12 @@ import { fetchAllPages } from "@/lib/pagedQueries";
 import { localDateIso } from "@/lib/dates";
 import { clientSchema, creanceSchema } from "@/schemas";
 import { formatCurrency } from "../utils/formatters";
+import { extraireFacture, joindreFacture, useExtractionActive, verifierFichierFacture } from "@/lib/factures";
+import type { FactureExtraction } from "@/schemas";
+
+type Champ = "numFacture" | "clientName" | "dateEmission" | "echeance" | "montantFacture";
+/** Mise en evidence d'un champ rempli par la lecture de la facture, tant que l'utilisateur ne l'a pas modifie. */
+const LU = "ring-2 ring-amber-400";
 
 const DebtForm = () => {
   const { id } = useParams<{ id: string }>();
@@ -36,6 +42,48 @@ const DebtForm = () => {
     echeance: "",
     montantFacture: "",
   });
+
+  // Import d'une facture PDF (creation uniquement) : lecture par le serveur, puis relecture ici.
+  const fichierInput = useRef<HTMLInputElement>(null);
+  const extractionActive = useExtractionActive(!isEditing);
+  const [facturePdf, setFacturePdf] = useState<File | null>(null);
+  const [lecture, setLecture] = useState<FactureExtraction | null>(null);
+  const [champsLus, setChampsLus] = useState<Set<Champ>>(new Set());
+  const lu = (champ: Champ) => (champsLus.has(champ) ? LU : "");
+  const oublierLu = (champ: string) =>
+    setChampsLus((prev) => {
+      if (!prev.has(champ as Champ)) return prev;
+      const suivant = new Set(prev);
+      suivant.delete(champ as Champ);
+      return suivant;
+    });
+
+  const extraction = useMutation({
+    mutationFn: (fichier: File) => extraireFacture(fichier),
+    onSuccess: (r, fichier) => {
+      const valeurs: Partial<Record<Champ, string>> = {};
+      if (r.numFacture) valeurs.numFacture = r.numFacture;
+      if (r.clientTrouve) valeurs.clientName = r.clientTrouve;
+      if (r.dateEmission) valeurs.dateEmission = r.dateEmission;
+      if (r.echeance) valeurs.echeance = r.echeance;
+      if (r.montantFacture != null) valeurs.montantFacture = r.montantFacture.toFixed(2);
+      setFormData((prev) => ({ ...prev, ...valeurs }));
+      setChampsLus(new Set(Object.keys(valeurs) as Champ[]));
+      setLecture(r);
+      setFacturePdf(fichier);
+      toast.success("Facture lue : vérifiez les champs avant d'enregistrer");
+    },
+    onError: (err) => toast.error(errorMessage(err, "Lecture de la facture impossible")),
+  });
+
+  const choisirFacture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fichier = e.target.files?.[0];
+    e.target.value = "";
+    if (!fichier) return;
+    const erreur = verifierFichierFacture(fichier);
+    if (erreur) toast.error(erreur);
+    else extraction.mutate(fichier);
+  };
 
   // Liste des clients pour la liste deroulante : toutes les pages (2000 clients maximum).
   const clientsQuery = useQuery({
@@ -81,18 +129,30 @@ const DebtForm = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    oublierLu(name);
   };
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
+    oublierLu(name);
   };
 
   const saveMutation = useMutation({
-    mutationFn: (payload: object) =>
-      apiFetch(isEditing ? `/creances/${encodeURIComponent(id ?? "")}` : "/creances", {
+    mutationFn: async (payload: { numFacture: string } & Record<string, unknown>) => {
+      await apiFetch(isEditing ? `/creances/${encodeURIComponent(id ?? "")}` : "/creances", {
         method: isEditing ? "PUT" : "POST",
         body: payload,
-      }),
+      });
+      // La facture importee est jointe a la creance creee. Un echec ici n'annule pas la creance :
+      // l'utilisateur pourra la joindre depuis la fiche.
+      if (!isEditing && facturePdf) {
+        try {
+          await joindreFacture(payload.numFacture, facturePdf);
+        } catch (err) {
+          toast.warning(errorMessage(err, "La facture PDF n'a pas pu être jointe : joignez-la depuis la fiche de la créance."));
+        }
+      }
+    },
     onSuccess: () => {
       toast.success(isEditing ? "Créance modifiée avec succès" : "Créance créée avec succès");
       queryClient.invalidateQueries({ queryKey: ["/creances"] });
@@ -164,6 +224,40 @@ const DebtForm = () => {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
+              {!isEditing && extractionActive.data && (
+                <div className="flex flex-wrap items-center gap-3 rounded-md border border-dashed p-4">
+                  <input ref={fichierInput} type="file" accept="application/pdf,.pdf" className="hidden"
+                         onChange={choisirFacture} aria-label="Facture PDF à importer" />
+                  <Button type="button" variant="outline" onClick={() => fichierInput.current?.click()}
+                          disabled={extraction.isPending}>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {extraction.isPending ? "Lecture de la facture…" : "Importer une facture (PDF)"}
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    {facturePdf ? (
+                      <span className="inline-flex items-center gap-1"><FileText className="h-4 w-4" /> {facturePdf.name} sera jointe à la créance</span>
+                    ) : (
+                      "Les champs sont pré-remplis à partir du PDF ; vérifiez-les avant d'enregistrer."
+                    )}
+                  </span>
+                </div>
+              )}
+
+              {lecture && lecture.avertissements.length > 0 && (
+                <Alert className="border-amber-200 bg-amber-50" role="status">
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    <p className="font-medium">À vérifier</p>
+                    <ul className="mt-1 list-disc pl-5">
+                      {lecture.avertissements.map((a) => <li key={a}>{a}</li>)}
+                    </ul>
+                    {!lecture.clientTrouve && (
+                      <Link to="/clients/new" className="mt-2 inline-block underline">Créer le client</Link>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Information Alert */}
               {isOverdue && (
                 <Alert className={isPenalized ? "border-red-200 bg-red-50" : "border-orange-200 bg-orange-50"}>
@@ -185,7 +279,7 @@ const DebtForm = () => {
                     name="numFacture"
                     value={formData.numFacture}
                     onChange={handleInputChange}
-                    className={isEditing ? "bg-muted" : ""}
+                    className={isEditing ? "bg-muted" : lu("numFacture")}
                     readOnly={isEditing}
                     required
                     maxLength={100}
@@ -199,7 +293,7 @@ const DebtForm = () => {
                     value={formData.clientName}
                     onValueChange={(value) => handleSelectChange("clientName", value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className={lu("clientName")} aria-label="Client">
                       <SelectValue placeholder="Sélectionner un client" />
                     </SelectTrigger>
                     <SelectContent>
@@ -217,6 +311,8 @@ const DebtForm = () => {
                   <Input
                     type="date"
                     name="dateEmission"
+                    aria-label="Date d'émission"
+                    className={lu("dateEmission")}
                     value={formData.dateEmission}
                     onChange={handleInputChange}
                     required
@@ -228,6 +324,8 @@ const DebtForm = () => {
                   <Input
                     type="date"
                     name="echeance"
+                    aria-label="Échéance"
+                    className={lu("echeance")}
                     value={formData.echeance}
                     onChange={handleInputChange}
                     required
@@ -241,6 +339,8 @@ const DebtForm = () => {
                     step="0.01"
                     min="0"
                     name="montantFacture"
+                    aria-label="Montant facturé"
+                    className={lu("montantFacture")}
                     value={formData.montantFacture}
                     onChange={handleInputChange}
                     required

@@ -81,6 +81,17 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
         <!-- Cache borne en memoire : compteurs du limiteur de connexions -->
+        <!-- Lecture des factures PDF : couche texte locale (PDFBox), structuration par Claude. -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.7</version>
+        </dependency>
+        <dependency>
+            <groupId>com.anthropic</groupId>
+            <artifactId>anthropic-java</artifactId>
+            <version>2.68.0</version>
+        </dependency>
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>

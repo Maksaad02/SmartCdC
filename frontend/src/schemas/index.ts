@@ -98,6 +98,28 @@ export const clientSchema = z.object({
   departementNom: z.string().nullish(),
 });
 
+/** Champs lus sur une facture PDF (POST /factures/extraction) : pre-remplissage, rien n'est enregistre. */
+export const factureExtractionSchema = z.object({
+  numFacture: z.string().nullish(),
+  dateEmission: z.string().nullish(),
+  echeance: z.string().nullish(),
+  montantFacture: z.number().nullish(),
+  clientRaisonSociale: z.string().nullish(),
+  clientIce: z.string().nullish(),
+  /** Raison sociale d'un client existant correspondant (ICE ou nom), sinon null. */
+  clientTrouve: z.string().nullish(),
+  source: z.enum(["TEXTE", "SCAN"]),
+  avertissements: z.array(z.string()),
+});
+export type FactureExtraction = z.infer<typeof factureExtractionSchema>;
+
+/** Facture PDF jointe a une creance (GET /creances/{numFacture}/document/info). */
+export const creanceDocumentInfoSchema = z.object({
+  nomFichier: z.string(),
+  taille: z.number(),
+  dateAjout: z.string(),
+});
+
 export const creanceSchema = z.object({
   id: z.number().nullish(),
   numFacture: z.string(),
