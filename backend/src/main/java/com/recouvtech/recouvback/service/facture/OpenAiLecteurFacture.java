@@ -80,7 +80,9 @@ public class OpenAiLecteurFacture implements LecteurFacture {
     private FactureLue lire(List<ChatCompletionContentPart> contenu) {
         StructuredChatCompletionCreateParams<FactureLue> params = ChatCompletionCreateParams.builder()
                 .model(modele)
-                .maxCompletionTokens(4000L)
+                // Une facture lue tient en ~100 jetons. OpenRouter refuse (402) une requete dont le maximum
+                // depasse le credit restant : une borne trop large bloquait des lectures payables.
+                .maxCompletionTokens(1500L)
                 .addSystemMessage(ConsignesFacture.SYSTEME)
                 .responseFormat(FactureLue.class)
                 .addUserMessageOfArrayOfContentParts(contenu)
