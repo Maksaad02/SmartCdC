@@ -71,8 +71,11 @@ services:
       CHATBOT_API_KEY: ${CHATBOT_API_KEY:?CHATBOT_API_KEY requis (32 caracteres minimum)}
       MAIL_USERNAME: ${MAIL_USERNAME:?MAIL_USERNAME requis}
       MAIL_PASSWORD: ${MAIL_PASSWORD:?MAIL_PASSWORD requis}
-      # Import automatique des factures PDF (Claude). Vide : fonctionnalite desactivee.
+      # Import automatique des factures PDF : Claude, sinon OpenRouter, sinon OpenAI ; aucune cle = desactive.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ADMIN_NAME: ${ADMIN_NAME:-Administrateur}

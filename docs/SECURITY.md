@@ -20,14 +20,18 @@ supprimer tout transfert à un tiers, il faut remplacer le fournisseur par un mo
 client (Ollama ou équivalent) : c'est un changement de configuration Spring AI, mais il impose un
 serveur adapté et une réindexation (dimension d'embedding différente).
 
-## Données envoyées à Anthropic (import des factures PDF)
+## Données envoyées à Anthropic ou OpenAI (import des factures PDF)
 
 Quand un utilisateur clique sur « Importer une facture (PDF) », le backend lit la facture pour
-pré-remplir le formulaire de créance avec Claude (Anthropic, hébergé hors du Maroc). Mêmes
-précautions que ci-dessus : **à valider avec le client** (loi 09-08 / CNDP, RGPD) et à couvrir par le
-DPA d'Anthropic. Sans `ANTHROPIC_API_KEY`, la fonctionnalité est désactivée et rien n'est envoyé.
+pré-remplir le formulaire de créance avec un modèle d'IA hébergé hors du Maroc : Claude (Anthropic)
+si `ANTHROPIC_API_KEY` est renseignée, sinon via OpenRouter si `OPENROUTER_API_KEY` l'est, sinon
+OpenAI (`gpt-4o`) si `OPENAI_API_KEY` l'est. Le fournisseur retenu est indiqué au démarrage du
+backend. Avec OpenRouter, la facture transite par **deux** sous-traitants : OpenRouter, puis le
+fournisseur du modèle choisi (`OPENROUTER_MODEL`). Mêmes précautions que ci-dessus : **à valider
+avec le client** (loi 09-08 / CNDP, RGPD) et à couvrir par le DPA du fournisseur. Sans aucune des deux
+clés, la fonctionnalité est désactivée et rien n'est envoyé.
 
-| Ce qui part chez Anthropic | Détail |
+| Ce qui part chez le fournisseur | Détail |
 |---|---|
 | Facture numérique | **Le texte** de la facture seulement, extrait sur le serveur (PDFBox) : numéro, dates, montants, raison sociale et ICE de l'émetteur et du client, lignes de facturation |
 | Facture scannée (sans texte) | **Le fichier PDF** lui-même, pour une lecture visuelle |

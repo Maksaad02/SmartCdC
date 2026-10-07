@@ -39,8 +39,9 @@ Au premier démarrage, Flyway crée le schéma MySQL (V1 à V7), le département
 | `JWT_PUBLIC_KEY` | Clé publique de vérification (donnée au chatbot) |
 | `CHATBOT_API_KEY` | Clé de service backend ↔ chatbot (32 caractères minimum) |
 | `MAIL_USERNAME`, `MAIL_PASSWORD` | SMTP (relances par e-mail) |
-| `OPENAI_API_KEY` | Clé OpenAI dédiée |
-| `ANTHROPIC_API_KEY` | Optionnelle. Import automatique des factures PDF (Claude) ; vide = fonctionnalité désactivée. Clé dédiée avec limite de dépense |
+| `OPENAI_API_KEY` | Clé OpenAI dédiée (chatbot ; lit aussi les factures PDF si `ANTHROPIC_API_KEY` est vide) |
+| `ANTHROPIC_API_KEY` | Optionnelle. Import automatique des factures PDF par Claude (prioritaire) ; sans aucune clé d'IA, la fonctionnalité est désactivée. Clé dédiée avec limite de dépense |
+| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | Optionnelles. Import des factures via OpenRouter si `ANTHROPIC_API_KEY` est vide (modèle par défaut `openai/gpt-4o`) |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME` | Premier compte (ignoré une fois un utilisateur créé) |
 | `COOKIE_SECURE` | `true` (défaut, exige HTTPS). `false` uniquement pour un essai HTTP sans TLS |
 
@@ -82,7 +83,7 @@ pas). Procédure : arrêter, restaurer la sauvegarde MySQL d'avant la mise à jo
 | Clé JWT | `generate-jwt-keys.sh`, mettre à jour les DEUX variables, `docker compose up -d backend rag` | Tous les utilisateurs doivent se reconnecter |
 | `CHATBOT_API_KEY` | Nouvelle valeur dans `.env`, `docker compose up -d backend rag` | Aucune |
 | Mots de passe des bases | Changer dans la base **puis** dans `.env`, redémarrer les services | Brève interruption |
-| Clé OpenAI | Créer la nouvelle clé, la mettre dans `.env`, `docker compose up -d rag`, révoquer l'ancienne | Aucune |
+| Clé OpenAI | Créer la nouvelle clé, la mettre dans `.env`, `docker compose up -d rag backend`, révoquer l'ancienne | Aucune |
 | Clé Anthropic | Créer la nouvelle clé, la mettre dans `.env`, `docker compose up -d backend`, révoquer l'ancienne | Aucune |
 | Mot de passe SMTP | Mettre à jour `.env`, `docker compose up -d backend` | Aucune |
 
